@@ -36,3 +36,5 @@ reports/*
 Thumbs.db
 # Generated financial data
 *.csv
+# Downloaded SEC filing documents
+data/filings/

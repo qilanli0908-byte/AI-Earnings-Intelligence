@@ -4,6 +4,7 @@ import pandas as pd
 
 from sec_dynamic import get_sec_financials
 from src.change_detector import calculate_financial_changes
+from src.filing_retrieval import get_recent_10k_with_urls
 
 from research import (
     get_stock_data,
@@ -267,7 +268,66 @@ if st.button("Analyze"):
                             width="stretch",
                             hide_index=True
                         )
+                    
+                    # ----------------------------------
+                    # 9. SEC Filing Explorer
+                    # ----------------------------------
 
+                    st.subheader("SEC Filing Explorer")
+
+                    st.write(
+                        "Access the two most recent annual "
+                        "10-K filings directly from SEC EDGAR."
+                    )
+
+                    try:
+
+                        recent_filings = get_recent_10k_with_urls(
+                            ticker,
+                            limit=2
+                        )
+
+                        if not recent_filings.empty:
+
+                            filing_columns = [
+                                "form",
+                                "filingDate",
+                                "reportDate",
+                                "accessionNumber",
+                                "Document URL"
+                            ]
+
+                            st.dataframe(
+                                recent_filings[filing_columns],
+                                width="stretch",
+                                hide_index=True,
+                                column_config={
+                                    "Document URL": st.column_config.LinkColumn(
+                                        "Official SEC Filing",
+                                        display_text="Open 10-K"
+                                    )
+                                }
+                            )
+
+                            st.caption(
+                                "Source: SEC EDGAR Submissions API. "
+                                "Links point to the filing's primary document."
+                            )
+
+                        else:
+
+                            st.warning(
+                                "No recent 10-K filings were found."
+                            )
+
+                    except Exception as filing_error:
+
+                        st.warning(
+                            f"Unable to retrieve filing history: "
+                            f"{filing_error}"
+                        )
+
+        
                 else:
 
                     st.warning(
