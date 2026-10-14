@@ -2,6 +2,20 @@
 import streamlit as st
 import pandas as pd
 
+from pathlib import Path
+
+from src.filing_parser import (
+    extract_filing_text,
+    clean_filing_text,
+    extract_section
+)
+
+from src.filing_diff import (
+    compare_filing_sections,
+    match_revised_disclosures,
+    is_formatting_only_change
+)
+
 from sec_dynamic import get_sec_financials
 from src.change_detector import calculate_financial_changes
 from src.filing_retrieval import get_recent_10k_with_urls
@@ -341,3 +355,168 @@ if st.button("Analyze"):
                 )
 
             st.success("Research process completed.")
+
+# ============================================================
+# SEC Filing Diff Explorer
+# ============================================================
+
+st.divider()
+st.subheader("SEC Filing Diff Explorer")
+
+st.caption(
+    "Compare Risk Factors across two annual SEC 10-K filings. "
+    "Results are rule-based textual differences, not investment advice."
+)
+
+diff_ticker = st.selectbox(
+    "Select company for filing comparison",
+    ["NVDA", "AMD"],
+    key="filing_diff_ticker"
+)
+
+filing_folder = Path("data/filings") / diff_ticker
+
+filing_files = sorted(
+    filing_folder.glob("*_10K.html")
+)
+
+if len(filing_files) < 2:
+
+    st.info(
+        "Two downloaded 10-K filings are required. "
+        "Please download the filings first."
+    )
+
+else:
+
+    if st.button(
+        "Compare Annual Risk Disclosures",
+        key="run_filing_diff"
+    ):
+
+        with st.spinner("Comparing SEC filings..."):
+
+            try:
+
+                def load_risk_factors(filepath):
+
+                    raw_text = extract_filing_text(filepath)
+                    clean_text = clean_filing_text(raw_text)
+
+                    return extract_section(
+                        clean_text,
+                        "1A",
+                        "1B"
+                    )
+
+                # The two downloaded filings are sorted by filename.
+                old_file = filing_files[-2]
+                new_file = filing_files[-1]
+
+                old_text = load_risk_factors(old_file)
+                new_text = load_risk_factors(new_file)
+
+                diff_result = compare_filing_sections(
+                    old_text,
+                    new_text
+                )
+
+                matched = match_revised_disclosures(
+                    diff_result,
+                    threshold=0.75
+                )
+
+                formatting_only = []
+                wording_changes = []
+
+                for item in matched["revised"]:
+
+                    if is_formatting_only_change(
+                        item["old"],
+                        item["new"]
+                    ):
+                        formatting_only.append(item)
+
+                    else:
+                        wording_changes.append(item)
+
+                st.success("Filing comparison completed.")
+
+                st.write("**Older filing:**", old_file.name)
+                st.write("**Newer filing:**", new_file.name)
+
+                col1, col2, col3, col4 = st.columns(4)
+
+                col1.metric(
+                    "Wording Changes",
+                    len(wording_changes)
+                )
+
+                col2.metric(
+                    "Added",
+                    matched["added_count"]
+                )
+
+                col3.metric(
+                    "Removed",
+                    matched["removed_count"]
+                )
+
+                col4.metric(
+                    "Formatting-only",
+                    len(formatting_only)
+                )
+
+                st.caption(
+                    "Counts represent comparison units, "
+                    "not confirmed material risk events."
+                )
+
+                st.markdown("### Revised Disclosures")
+
+                for index, item in enumerate(
+                    wording_changes,
+                    start=1
+                ):
+
+                    with st.expander(
+                        f"Revision {index} | "
+                        f"Similarity: {item['similarity']:.1%}"
+                    ):
+
+                        st.markdown("**Previous disclosure**")
+                        st.write(item["old"])
+
+                        st.markdown("**Updated disclosure**")
+                        st.write(item["new"])
+
+                with st.expander(
+                    f"Unmatched Added ({matched['added_count']})"
+                ):
+
+                    for item in matched["added"]:
+                        st.write(item)
+                        st.divider()
+
+                with st.expander(
+                    f"Unmatched Removed ({matched['removed_count']})"
+                ):
+
+                    for item in matched["removed"]:
+                        st.write(item)
+                        st.divider()
+
+                with st.expander(
+                    f"Formatting-only ({len(formatting_only)})"
+                ):
+
+                    for item in formatting_only:
+                        st.write("OLD:", item["old"])
+                        st.write("NEW:", item["new"])
+                        st.divider()
+
+            except Exception as error:
+
+                st.error(
+                    f"Filing comparison failed: {error}"
+                )
