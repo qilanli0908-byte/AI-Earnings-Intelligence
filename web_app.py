@@ -1,6 +1,9 @@
-from sec_dynamic import get_sec_financials
+
 import streamlit as st
 import pandas as pd
+
+from sec_dynamic import get_sec_financials
+from src.change_detector import calculate_financial_changes
 
 from research import (
     get_stock_data,
@@ -10,16 +13,28 @@ from research import (
     generate_commentary
 )
 
-# Page settings
+
+# --------------------------------------------------
+# Page Settings
+# --------------------------------------------------
+
 st.set_page_config(
-    page_title="AI Equity Research Copilot",
+    page_title="AI Earnings Intelligence & Thesis Tracker",
     layout="wide"
 )
 
-st.title("AI Equity Research Copilot")
-st.write("Your AI-powered investment research assistant.")
+st.title("AI Earnings Intelligence & Thesis Tracker")
 
-# Stock ticker input
+st.write(
+    "An evidence-driven financial research platform "
+    "powered by SEC financial data and structured analysis."
+)
+
+
+# --------------------------------------------------
+# Ticker Input
+# --------------------------------------------------
+
 ticker = st.text_input(
     "Enter a stock ticker:",
     value="NVDA"
@@ -33,19 +48,27 @@ if st.button("Analyze"):
         st.warning("Please enter a valid ticker.")
 
     else:
+
         with st.spinner(f"Analyzing {ticker}..."):
 
-            # 1. Get stock data
+            # ------------------------------------------
+            # 1. Stock Data
+            # ------------------------------------------
+
             data = get_stock_data(ticker)
 
             if data.empty:
-                st.error("No stock data found. Please check the ticker.")
+                st.error(
+                    "No stock data found. Please check the ticker."
+                )
                 st.stop()
 
-            # 2. Get company information
+            # ------------------------------------------
+            # 2. Company Information
+            # ------------------------------------------
+
             info = get_company_info(ticker)
 
-            # 3. Calculate stock performance
             first_price = data["Close"].iloc[0]
             latest_price = data["Close"].iloc[-1]
 
@@ -53,14 +76,31 @@ if st.button("Analyze"):
                 (latest_price - first_price) / first_price
             ) * 100
 
-            # 4. Company Overview
+            # ------------------------------------------
+            # 3. Company Overview
+            # ------------------------------------------
+
             st.header("Company Overview")
 
-            st.write("Company:", info.get("longName", ticker))
-            st.write("Sector:", info.get("sector", "N/A"))
-            st.write("Industry:", info.get("industry", "N/A"))
+            st.write(
+                "Company:",
+                info.get("longName", ticker)
+            )
 
-            # 5. Stock Performance
+            st.write(
+                "Sector:",
+                info.get("sector", "N/A")
+            )
+
+            st.write(
+                "Industry:",
+                info.get("industry", "N/A")
+            )
+
+            # ------------------------------------------
+            # 4. Stock Performance
+            # ------------------------------------------
+
             st.header("Stock Performance")
 
             col1, col2 = st.columns(2)
@@ -77,13 +117,16 @@ if st.button("Analyze"):
                     f"{stock_return:.2f}%"
                 )
 
-            # 6. Stock Chart
             st.subheader("Stock Price Chart")
 
             st.line_chart(data["Close"])
 
-            # 7. Financial Analysis
+            # ------------------------------------------
+            # 5. Financial Performance
+            # ------------------------------------------
+
             income = get_financials(ticker)
+
             summary = analyze_financials(income)
 
             st.header("Financial Performance")
@@ -92,47 +135,149 @@ if st.button("Analyze"):
 
                 st.dataframe(
                     summary.round(2),
-                    use_container_width=True
+                    width="stretch"
                 )
 
-                # 8. Financial Commentary
                 commentary = generate_commentary(summary)
 
                 st.header("Financial Commentary")
+
                 st.write(commentary)
 
             else:
-                st.warning("Financial data is unavailable.")
+                st.warning(
+                    "Financial data is unavailable."
+                )
 
-            st.success("Research completed successfully!")
-            
-            # 9. SEC Official Financial Analysis
-            
-            # 9. Dynamic SEC Financial Analysis
+            # ------------------------------------------
+            # 6. Official SEC Financial Analysis
+            # ------------------------------------------
+
             st.header("SEC Official Financial Analysis")
 
             try:
+
                 sec_summary = get_sec_financials(ticker)
 
                 if sec_summary is not None and not sec_summary.empty:
 
+                    # Show the core financial metrics.
+                    financial_columns = [
+                        "end",
+                        "Revenue ($B)",
+                        "Net Income ($B)",
+                        "Revenue Growth (%)",
+                        "Net Margin (%)"
+                    ]
+
                     st.dataframe(
-                        sec_summary,
-                        use_container_width=True
+                        sec_summary[financial_columns],
+                        width="stretch",
+                        hide_index=True
                     )
 
                     st.caption(
-                        f"Source: SEC EDGAR Company Facts | Ticker: {ticker}"
+                        f"Source: SEC EDGAR Company Facts | "
+                        f"Ticker: {ticker}"
                     )
 
+                    # ----------------------------------
+                    # 7. Financial Change Detector
+                    # ----------------------------------
+
+                    st.header("Financial Change Detector")
+
+                    changes = calculate_financial_changes(
+                        sec_summary
+                    )
+
+                    if not changes.empty:
+
+                        latest = changes.iloc[-1]
+
+                        st.subheader("Latest Research Signals")
+
+                        signal_col1, signal_col2 = st.columns(2)
+
+                        with signal_col1:
+
+                            st.metric(
+                                "Revenue Growth Trend",
+                                latest["Growth Trend"]
+                            )
+
+                        with signal_col2:
+
+                            st.metric(
+                                "Net Margin Trend",
+                                latest["Margin Trend"]
+                            )
+
+                        st.info(
+                            f"Research Signal: "
+                            f"{latest['Research Signal']}"
+                        )
+
+                        st.subheader("Financial Change History")
+
+                        change_columns = [
+                            "end",
+                            "Revenue Growth (%)",
+                            "Growth Change (pp)",
+                            "Growth Trend",
+                            "Net Margin (%)",
+                            "Margin Change (pp)",
+                            "Margin Trend",
+                            "Research Signal"
+                        ]
+
+                        st.dataframe(
+                            changes[change_columns].round(2),
+                            width="stretch",
+                            hide_index=True
+                        )
+
+                        st.caption(
+                            "Research signals are rule-based "
+                            "interpretations of historical SEC "
+                            "financial data. They are not "
+                            "investment recommendations."
+                        )
+
+                    # ----------------------------------
+                    # 8. SEC Source Information
+                    # ----------------------------------
+
+                    with st.expander("View SEC Filing Sources"):
+
+                        source_columns = [
+                            "end",
+                            "Revenue Filing Date",
+                            "Revenue Accession",
+                            "Revenue Source Tag",
+                            "Revenue SEC URL",
+                            "Net Income Filing Date",
+                            "Net Income Accession",
+                            "Net Income Source Tag",
+                            "Net Income SEC URL"
+                        ]
+
+                        st.dataframe(
+                            sec_summary[source_columns],
+                            width="stretch",
+                            hide_index=True
+                        )
+
                 else:
+
                     st.warning(
                         f"SEC financial data unavailable for {ticker}."
                     )
 
             except Exception as error:
+
                 st.error(
-                    f"Unable to retrieve SEC data: {error}"
+                    f"Unable to retrieve or analyze SEC data: {error}"
                 )
 
-
+            st.success("Research process completed.")
