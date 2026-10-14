@@ -31,16 +31,21 @@ def get_cik(ticker):
 
 
 def extract_annual(facts, tags):
-    """Extract annual data across multiple XBRL tags."""
+    """
+    Extract annual financial facts from SEC XBRL data.
+
+    Preserve filing provenance and prioritize the supplied
+    XBRL tags when multiple tags cover the same period.
+    """
 
     records = []
 
-    for tag in tags:
+    for priority, tag in enumerate(tags):
 
         if tag not in facts:
             continue
 
-        entries = facts[tag]["units"].get("USD", [])
+        entries = facts[tag].get("units", {}).get("USD", [])
 
         for item in entries:
 
@@ -59,7 +64,9 @@ def extract_annual(facts, tags):
                 continue
 
             record = item.copy()
+
             record["source_tag"] = tag
+            record["tag_priority"] = priority
 
             records.append(record)
 
@@ -68,15 +75,40 @@ def extract_annual(facts, tags):
 
     df = pd.DataFrame(records)
 
-    df = df.sort_values("filed")
+    # Prefer the first available tag for the same period.
+    # Within that tag, retain the latest filed value.
+    df = df.sort_values(
+        ["tag_priority", "filed"],
+        ascending=[True, False]
+    )
 
     df = df.drop_duplicates(
         subset=["start", "end"],
-        keep="last"
+        keep="first"
     )
 
-    return df.sort_values("end")
+    return df.sort_values("end").reset_index(drop=True)
 
+
+def build_sec_filing_url(cik, accession_number):
+    """
+    Build a link to the SEC filing directory.
+
+    Example:
+    https://www.sec.gov/Archives/edgar/data/...
+    """
+
+    if not accession_number:
+        return None
+
+    cik_number = str(int(cik))
+
+    accession_clean = accession_number.replace("-", "")
+
+    return (
+        "https://www.sec.gov/Archives/edgar/data/"
+        f"{cik_number}/{accession_clean}/"
+    )
 
 def get_sec_financials(ticker):
 
@@ -121,21 +153,40 @@ def get_sec_financials(ticker):
 
     if revenue.empty or net_income.empty:
         return None
+    
+   
+    # Preserve the original SEC source for each metric.
 
-    rev = revenue[["end", "val"]].rename(
-        columns={"val": "Revenue"}
+    rev = revenue[
+        ["start", "end", "val", "filed", "accn", "source_tag"]
+    ].rename(
+        columns={
+            "val": "Revenue",
+            "filed": "Revenue Filing Date",
+            "accn": "Revenue Accession",
+            "source_tag": "Revenue Source Tag"
+        }
     )
 
-    net = net_income[["end", "val"]].rename(
-        columns={"val": "Net Income"}
+    net = net_income[
+        ["start", "end", "val", "filed", "accn", "source_tag"]
+    ].rename(
+        columns={
+            "val": "Net Income",
+            "filed": "Net Income Filing Date",
+            "accn": "Net Income Accession",
+            "source_tag": "Net Income Source Tag"
+        }
     )
 
+   
     summary = pd.merge(
         rev,
         net,
-        on="end",
+        on=["start", "end"],
         how="inner"
     )
+
 
     summary = summary.drop_duplicates(
         subset=["end"],
@@ -160,17 +211,54 @@ def get_sec_financials(ticker):
         summary["Net Income"] / summary["Revenue"] * 100
     )
 
+   
+    # Generate SEC source links for each financial metric.
+
+    summary["Revenue SEC URL"] = summary[
+        "Revenue Accession"
+    ].apply(
+        lambda accn: build_sec_filing_url(cik, accn)
+    )
+
+    summary["Net Income SEC URL"] = summary[
+        "Net Income Accession"
+    ].apply(
+        lambda accn: build_sec_filing_url(cik, accn)
+    )
+
+    # Keep financial metrics and original SEC provenance.
+
     result = summary[
         [
+            "start",
             "end",
             "Revenue ($B)",
             "Net Income ($B)",
             "Revenue Growth (%)",
-            "Net Margin (%)"
+            "Net Margin (%)",
+            "Revenue Filing Date",
+            "Revenue Accession",
+            "Revenue Source Tag",
+            "Revenue SEC URL",
+            "Net Income Filing Date",
+            "Net Income Accession",
+            "Net Income Source Tag",
+            "Net Income SEC URL"
         ]
-    ].tail(4)
+    ].tail(4).copy()
 
-    return result.round(2)
+    # Round only numerical financial metrics.
+    numeric_columns = [
+        "Revenue ($B)",
+        "Net Income ($B)",
+        "Revenue Growth (%)",
+        "Net Margin (%)"
+    ]
+
+    result[numeric_columns] = result[numeric_columns].round(2)
+
+    return result
+
 
 
 # Test the function
