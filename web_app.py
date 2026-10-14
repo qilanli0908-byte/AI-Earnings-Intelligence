@@ -20,6 +20,7 @@ from sec_dynamic import get_sec_financials
 from src.change_detector import calculate_financial_changes
 from src.filing_retrieval import get_recent_10k_with_urls
 from src.ai_analyzer import analyze_disclosure
+from src.research_engine import assess_research_priority
 
 from research import (
     get_stock_data,
@@ -522,6 +523,77 @@ else:
                                         f"AI analysis failed: "
                                         f"{type(error).__name__}"
                                     )
+
+                        research_key = (
+                            f"research_result_{ticker}_"
+                            f"{old_file.name}_{new_file.name}_{index}"
+                        )
+
+                        if st.button(
+                            "Assess Research Priority",
+                            key=research_key + "_button"
+                        ):
+                            with st.spinner(
+                                "Assessing research significance..."
+                            ):
+                                try:
+                                    assessment = assess_research_priority(
+                                        ticker=ticker,
+                                        section="Item 1A - Risk Factors",
+                                        change_type="Revised",
+                                        old_disclosure=item["old"],
+                                        new_disclosure=item["new"]
+                                    )
+
+                                    st.session_state[
+                                        research_key
+                                    ] = assessment
+
+                                except Exception as error:
+                                    st.error(
+                                        "Research assessment failed: "
+                                        f"{type(error).__name__}: {error}"
+                                    )
+
+                        if research_key in st.session_state:
+
+                            assessment = st.session_state[research_key]
+
+                            st.markdown("#### Research Assessment")
+
+                            col_a, col_b = st.columns(2)
+
+                            col_a.metric(
+                                "Change Significance",
+                                assessment.significance
+                            )
+
+                            col_b.metric(
+                                "Research Priority",
+                                assessment.research_priority
+                            )
+
+                            st.markdown("**Evidence from Disclosure**")
+
+                            for quote in assessment.evidence:
+                                st.code(quote, language=None)
+
+                            st.markdown("**Research Rationale**")
+                            st.write(assessment.rationale)
+
+                            st.markdown("**Follow-up Research Questions**")
+
+                            for question in assessment.research_questions:
+                                st.write(f"- {question}")
+
+                            st.caption(
+                                "Research priority reflects the importance "
+                                "of further investigation, not confirmed "
+                                "financial materiality or investment advice. "
+                                "Evidence quotations are checked against "
+                                "the supplied disclosure text. "
+                                "Human review remains required."
+                            )
 
                         result_key = (
                             f"ai_result_{ticker}_"
