@@ -19,6 +19,7 @@ from src.filing_diff import (
 from sec_dynamic import get_sec_financials
 from src.change_detector import calculate_financial_changes
 from src.filing_retrieval import get_recent_10k_with_urls
+from src.ai_analyzer import analyze_disclosure
 
 from research import (
     get_stock_data,
@@ -389,10 +390,18 @@ if len(filing_files) < 2:
 
 else:
 
+    
+    if "show_filing_diff" not in st.session_state:
+        st.session_state.show_filing_diff = False
+
     if st.button(
-        "Compare Annual Risk Disclosures",
-        key="run_filing_diff"
+    "Compare Annual Risk Disclosures",
+    key="run_filing_diff"
     ):
+        st.session_state.show_filing_diff = True
+
+    if st.session_state.show_filing_diff:
+
 
         with st.spinner("Comparing SEC filings..."):
 
@@ -489,6 +498,63 @@ else:
 
                         st.markdown("**Updated disclosure**")
                         st.write(item["new"])
+                        
+                        if st.button(
+                            "Analyze with AI",
+                            key=f"ai_revision_{index}"
+                        ):
+                            with st.spinner("Analyzing disclosure..."):
+                                try:
+                                    analysis = analyze_disclosure(
+                                        ticker=ticker,
+                                        section="Item 1A - Risk Factors",
+                                        change_type="Revised",
+                                        old_disclosure=item["old"],
+                                        new_disclosure=item["new"]
+                                    )
+                                    st.session_state[
+                                        f"ai_result_{ticker}_{old_file.name}_{new_file.name}_{index}"
+                                    ] = analysis
+                                
+
+                                except Exception as error:
+                                    st.error(
+                                        f"AI analysis failed: "
+                                        f"{type(error).__name__}"
+                                    )
+
+                        result_key = (
+                            f"ai_result_{ticker}_"
+                            f"{old_file.name}_{new_file.name}_{index}"
+                        )
+
+                        if result_key in st.session_state:
+
+                            analysis = st.session_state[result_key]
+
+                            st.markdown("#### AI Analysis")
+
+                            st.markdown("**Change Summary**")
+                            st.write(analysis.change_summary)
+
+                            st.markdown(
+                                "**Potential Business Implications**"
+                            )
+                            st.write(
+                                analysis.potential_business_implications
+                            )
+
+                            st.markdown("**Research Questions**")
+
+                            for question in analysis.research_questions:
+                                st.write(f"- {question}")
+
+                            st.caption(
+                                "AI-generated research assistance. "
+                                "Requires human review against "
+                                "the original SEC filing."
+                            )
+
 
                 with st.expander(
                     f"Unmatched Added ({matched['added_count']})"
