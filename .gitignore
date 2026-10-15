@@ -45,3 +45,5 @@ data/theses/
 # Local PDF previews
 memo_preview.pdf
 memo_enhanced_preview.pdf
+# Local development backups
+.day16_backups/
