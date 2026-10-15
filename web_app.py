@@ -47,6 +47,7 @@ from research import (
     analyze_financials,
     generate_commentary
 )
+from src.thesis_monitor_ui import render_thesis_monitoring
 
 
 # --------------------------------------------------
@@ -957,7 +958,13 @@ else:
                         )
 
                     render_company_profile(profile)
+                    
+                    st.divider()
 
+                    render_thesis_monitoring(
+                        ticker=profile_ticker,
+                        financial_changes=company_changes,
+                    )
 
                 except Exception as error:
 
