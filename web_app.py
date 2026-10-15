@@ -18,6 +18,8 @@ from src.filing_diff import (
 
 from sec_dynamic import get_sec_financials
 from src.change_detector import calculate_financial_changes
+from src.signal_dashboard import build_company_dashboard_data
+
 from src.filing_retrieval import get_recent_10k_with_urls
 from src.ai_analyzer import analyze_disclosure
 from src.research_engine import assess_research_priority
@@ -653,6 +655,241 @@ else:
 
 
                 st.markdown("### Research Priority Ranking")
+
+                # ==========================================
+                # DAY 9: COMPANY RESEARCH SIGNALS
+                # ==========================================
+
+                st.divider()
+
+                st.header("Company Research Signals")
+
+                st.caption(
+                    "Integrated financial and disclosure research "
+                    "signals for the selected company."
+                )
+
+                try:
+                    # Retrieve financial data for the current ticker.
+                    company_financials = get_sec_financials(
+                        ticker
+                    )
+
+                    if (
+                        company_financials is not None
+                        and not company_financials.empty
+                    ):
+                        company_changes = (
+                            calculate_financial_changes(
+                                company_financials
+                            )
+                        )
+                    else:
+                        company_changes = None
+
+                    # Load only the current filing comparison's
+                    # validated disclosure assessments.
+                    dashboard_data = (
+                        build_company_dashboard_data(
+                            ticker=ticker,
+                            financial_changes=company_changes,
+                            wording_changes=wording_changes,
+                        )
+                    )
+
+                    company_signals = dashboard_data["company"]
+
+                    # --------------------------------------
+                    # Research overview
+                    # --------------------------------------
+
+                    st.subheader(
+                        f"{ticker} Research Overview"
+                    )
+
+                    overview_col1, overview_col2, overview_col3 = (
+                        st.columns(3)
+                    )
+
+                    overview_col1.metric(
+                        "Disclosure Changes",
+                        dashboard_data["total_changes"]
+                    )
+
+                    overview_col2.metric(
+                        "Assessed",
+                        dashboard_data["assessed_count"]
+                    )
+
+                    overview_col3.metric(
+                        "Not Assessed",
+                        dashboard_data["not_assessed_count"]
+                    )
+
+                    # --------------------------------------
+                    # Financial + disclosure signals
+                    # --------------------------------------
+
+                    financial_col, disclosure_col = (
+                        st.columns(2)
+                    )
+
+                    with financial_col:
+
+                        st.markdown(
+                            "#### Financial Signals"
+                        )
+
+                        financial = company_signals.financial
+
+                        if financial is not None:
+
+                            st.metric(
+                                "Revenue Growth",
+                                (
+                                    f"{financial.revenue_growth:.2f}%"
+                                    if financial.revenue_growth
+                                    is not None
+                                    else "N/A"
+                                )
+                            )
+
+                            st.write(
+                                "**Growth Trend:**",
+                                financial.growth_trend
+                            )
+
+                            st.write(
+                                "**Margin Trend:**",
+                                financial.margin_trend
+                            )
+
+                            st.info(
+                                financial.research_signal
+                            )
+
+                            st.caption(
+                                "Source: SEC Company Facts | "
+                                f"Fiscal year end: "
+                                f"{financial.fiscal_year_end}"
+                            )
+
+                        else:
+
+                            st.warning(
+                                "Financial data is unavailable."
+                            )
+
+                    with disclosure_col:
+
+                        st.markdown(
+                            "#### Disclosure Signals"
+                        )
+
+                        st.metric(
+                            "High Priority",
+                            company_signals.high_priority_count
+                        )
+
+                        st.metric(
+                            "Medium Priority",
+                            company_signals.medium_priority_count
+                        )
+
+                        st.metric(
+                            "Low Priority",
+                            company_signals.low_priority_count
+                        )
+
+                        st.write(
+                            "**Research Status:**",
+                            company_signals.overall_research_status
+                        )
+
+                        st.caption(
+                            "Source: validated SEC 10-K "
+                            "disclosure assessments."
+                        )
+
+                    # --------------------------------------
+                    # Combined research interpretation
+                    # --------------------------------------
+
+                    st.subheader(
+                        "Combined Research Interpretation"
+                    )
+
+                    st.info(
+                        "Financial trends and disclosure "
+                        "research priorities are presented "
+                        "together for investigation. "
+                        "Their coexistence does not establish "
+                        "causation or imply an investment "
+                        "recommendation."
+                    )
+
+                    # --------------------------------------
+                    # Validated disclosure evidence
+                    # --------------------------------------
+
+                    if company_signals.disclosures:
+
+                        with st.expander(
+                            "View Validated Disclosure Evidence"
+                        ):
+
+                            for index, disclosure in enumerate(
+                                company_signals.disclosures,
+                                start=1
+                            ):
+
+                                st.markdown(
+                                    f"**Assessment {index}**"
+                                )
+
+                                st.write(
+                                    "Priority:",
+                                    disclosure.research_priority
+                                )
+
+                                st.write(
+                                    "Significance:",
+                                    disclosure.significance
+                                )
+
+                                st.write(
+                                    "Rationale:",
+                                    disclosure.rationale
+                                )
+
+                                for quote in disclosure.evidence:
+                                    st.code(
+                                        quote,
+                                        language=None
+                                    )
+
+                                st.divider()
+
+                    else:
+
+                        st.caption(
+                            "No validated disclosure assessments "
+                            "are available for this comparison."
+                        )
+
+                    st.caption(
+                        "Research signals require human review. "
+                        "The system does not establish "
+                        "financial causation or provide "
+                        "investment advice."
+                    )
+
+                except Exception as error:
+
+                    st.error(
+                        "Unable to build Company Research Signals: "
+                        f"{error}"
+                    )
 
                 saved_assessments = []
 
