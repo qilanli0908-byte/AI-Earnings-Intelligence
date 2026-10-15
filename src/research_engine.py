@@ -4,6 +4,7 @@ import os
 
 from dotenv import load_dotenv
 from openai import OpenAI
+from src.evidence_repair import repair_evidence
 
 from src.research_models import ResearchAssessment
 from src.research_prompts import (
@@ -104,6 +105,6 @@ def assess_research_priority(
         requires_human_review=True,
     )
 
-    validate_research_assessment(assessment)
+    assessment = repair_evidence(assessment)
 
     return assessment

@@ -158,7 +158,7 @@ def generate_research_signal(growth_trend, margin_trend):
         growth_trend == "Decelerating Growth"
         and margin_trend == "Margin Expansion"
     ):
-        return "Growth Moderation — Margin Improvement"
+        return "Growth Moderation - Margin Improvement"
 
     # Other combinations require additional context.
     return "Mixed Financial Signals"
