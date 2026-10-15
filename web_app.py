@@ -48,6 +48,12 @@ from research import (
     generate_commentary
 )
 from src.thesis_monitor_ui import render_thesis_monitoring
+from src.brief_builder import build_research_brief
+from src.brief_evidence import check_brief_evidence
+from src.brief_ui import render_research_brief
+
+from src.thesis_storage import load_theses
+from src.thesis_integration import monitor_company_theses
 
 
 # --------------------------------------------------
@@ -303,7 +309,7 @@ if st.button("Analyze"):
                             width="stretch",
                             hide_index=True
                         )
-                    
+
                     # ----------------------------------
                     # 9. SEC Filing Explorer
                     # ----------------------------------
@@ -362,7 +368,7 @@ if st.button("Analyze"):
                             f"{filing_error}"
                         )
 
-        
+
                 else:
 
                     st.warning(
@@ -410,7 +416,7 @@ if len(filing_files) < 2:
 
 else:
 
-    
+
     # Track the active Filing Comparison ticker.
     if "active_filing_ticker" not in st.session_state:
         st.session_state.active_filing_ticker = diff_ticker
@@ -527,7 +533,7 @@ else:
 
                         st.markdown("**Updated disclosure**")
                         st.write(item["new"])
-                        
+
                         if st.button(
                             "Analyze with AI",
                             key=f"ai_revision_{index}"
@@ -544,7 +550,7 @@ else:
                                     st.session_state[
                                         f"ai_result_{diff_ticker}_{old_file.name}_{new_file.name}_{index}"
                                     ] = analysis
-                                
+
 
                                 except Exception as error:
                                     st.error(
@@ -956,15 +962,33 @@ else:
                         raise ValueError(
                             "Company Profile ticker mismatch."
                         )
-
                     render_company_profile(profile)
-                    
                     st.divider()
-
                     render_thesis_monitoring(
                         ticker=profile_ticker,
                         financial_changes=company_changes,
                     )
+
+                    # Day 13: Evidence-Linked Research Brief
+                    st.divider()
+
+                    brief_theses = load_theses(profile_ticker)
+
+                    brief_monitoring = monitor_company_theses(
+                        ticker=profile_ticker,
+                        theses=brief_theses,
+                        financial_changes=company_changes,
+                    )
+
+                    brief = build_research_brief(
+                        profile=profile,
+                        theses=brief_theses,
+                        monitoring_results=brief_monitoring,
+                    )
+
+                    brief = check_brief_evidence(brief)
+
+                    render_research_brief(brief)
 
                 except Exception as error:
 
