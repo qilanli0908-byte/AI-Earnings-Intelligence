@@ -54,7 +54,8 @@ from src.brief_ui import render_research_brief
 
 from src.thesis_storage import load_theses
 from src.thesis_integration import monitor_company_theses
-
+from src.brief_integrity import validate_brief_integrity
+from src.brief_integrity_ui import render_integrity_report
 
 # --------------------------------------------------
 # Page Settings
@@ -988,7 +989,23 @@ else:
 
                     brief = check_brief_evidence(brief)
 
-                    render_research_brief(brief)
+                    # Day 14: Validate the completed Research Brief.
+                    integrity_report = validate_brief_integrity(
+                        brief=brief,
+                        expected_ticker=profile_ticker,
+                    )
+
+                    # Do not display a failed brief as a normal result.
+                    if integrity_report.passed:
+                        render_research_brief(brief)
+                    else:
+                        st.error(
+                            "Research Brief integrity check failed. "
+                            "Please review the errors below."
+                        )
+
+                    render_integrity_report(integrity_report)
+
 
                 except Exception as error:
 
