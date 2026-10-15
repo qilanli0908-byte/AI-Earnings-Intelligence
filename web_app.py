@@ -19,6 +19,13 @@ from src.filing_diff import (
 from sec_dynamic import get_sec_financials
 from src.change_detector import calculate_financial_changes
 from src.signal_dashboard import build_company_dashboard_data
+from src.signal_dashboard import load_current_disclosure_assessments
+
+from src.company_builder import build_company_profile
+
+from src.company_profile_ui import render_company_profile
+
+from src.filing_retrieval import get_company_submissions
 
 from src.filing_retrieval import get_recent_10k_with_urls
 from src.ai_analyzer import analyze_disclosure
@@ -403,6 +410,15 @@ if len(filing_files) < 2:
 else:
 
     
+    # Track the active Filing Comparison ticker.
+    if "active_filing_ticker" not in st.session_state:
+        st.session_state.active_filing_ticker = diff_ticker
+
+    # Hide the previous company's comparison on ticker change.
+    if st.session_state.active_filing_ticker != diff_ticker:
+        st.session_state.active_filing_ticker = diff_ticker
+        st.session_state.show_filing_diff = False
+
     if "show_filing_diff" not in st.session_state:
         st.session_state.show_filing_diff = False
 
@@ -518,14 +534,14 @@ else:
                             with st.spinner("Analyzing disclosure..."):
                                 try:
                                     analysis = analyze_disclosure(
-                                        ticker=ticker,
+                                        ticker=diff_ticker,
                                         section="Item 1A - Risk Factors",
                                         change_type="Revised",
                                         old_disclosure=item["old"],
                                         new_disclosure=item["new"]
                                     )
                                     st.session_state[
-                                        f"ai_result_{ticker}_{old_file.name}_{new_file.name}_{index}"
+                                        f"ai_result_{diff_ticker}_{old_file.name}_{new_file.name}_{index}"
                                     ] = analysis
                                 
 
@@ -536,14 +552,14 @@ else:
                                     )
 
                         research_key = (
-                            f"research_result_{ticker}_"
+                            f"research_result_{diff_ticker}_"
                             f"{old_file.name}_{new_file.name}_{index}"
                         )
 
                         if research_key not in st.session_state:
 
                             cached_assessment = load_assessment(
-                                ticker=ticker,
+                                ticker=diff_ticker,
                                 section="Item 1A - Risk Factors",
                                 change_type="Revised",
                                 old_disclosure=item["old"],
@@ -564,7 +580,7 @@ else:
                             ):
                                 try:
                                     assessment = assess_research_priority(
-                                        ticker=ticker,
+                                        ticker=diff_ticker,
                                         section="Item 1A - Risk Factors",
                                         change_type="Revised",
                                         old_disclosure=item["old"],
@@ -621,8 +637,10 @@ else:
                                 "Human review remains required."
                             )
 
+
+
                         result_key = (
-                            f"ai_result_{ticker}_"
+                            f"ai_result_{diff_ticker}_"
                             f"{old_file.name}_{new_file.name}_{index}"
                         )
 
@@ -669,10 +687,11 @@ else:
                     "signals for the selected company."
                 )
 
+
                 try:
-                    # Retrieve financial data for the current ticker.
+                    # Retrieve financial data for the selected company.
                     company_financials = get_sec_financials(
-                        ticker
+                        diff_ticker
                     )
 
                     if (
@@ -687,11 +706,12 @@ else:
                     else:
                         company_changes = None
 
+
                     # Load only the current filing comparison's
                     # validated disclosure assessments.
                     dashboard_data = (
                         build_company_dashboard_data(
-                            ticker=ticker,
+                            ticker=diff_ticker,
                             financial_changes=company_changes,
                             wording_changes=wording_changes,
                         )
@@ -704,7 +724,7 @@ else:
                     # --------------------------------------
 
                     st.subheader(
-                        f"{ticker} Research Overview"
+                        f"{diff_ticker} Research Overview"
                     )
 
                     overview_col1, overview_col2, overview_col3 = (
@@ -884,6 +904,61 @@ else:
                         "investment advice."
                     )
 
+
+                    # ======================================
+                    # DAY 10: COMPANY RESEARCH PROFILE
+                    # ======================================
+
+                    st.divider()
+
+                    # Always use the Filing Comparison ticker.
+                    profile_ticker = diff_ticker.strip().upper()
+
+                    # Official SEC company identity.
+                    profile_submissions = (
+                        get_company_submissions(
+                            profile_ticker
+                        )
+                    )
+
+                    # Official SEC 10-K sources.
+                    profile_filings = (
+                        get_recent_10k_with_urls(
+                            profile_ticker,
+                            limit=2
+                        )
+                    )
+
+                    # Only load assessments belonging
+                    # to the selected company and
+                    # current filing comparison.
+                    profile_assessments = (
+                        load_current_disclosure_assessments(
+                            ticker=profile_ticker,
+                            wording_changes=wording_changes,
+                        )
+                    )
+
+                    # Build the unified profile.
+                    profile = build_company_profile(
+                        ticker=profile_ticker,
+                        submissions=profile_submissions,
+                        financial_df=company_financials,
+                        financial_changes=company_changes,
+                        filings_df=profile_filings,
+                        assessments=profile_assessments,
+                        total_changes=len(wording_changes),
+                    )
+
+                    # Prevent accidental cross-company display.
+                    if profile.identity.ticker != profile_ticker:
+                        raise ValueError(
+                            "Company Profile ticker mismatch."
+                        )
+
+                    render_company_profile(profile)
+
+
                 except Exception as error:
 
                     st.error(
@@ -899,7 +974,7 @@ else:
                     start=1
                 ):
                     session_key = (
-                        f"research_result_{ticker}_"
+                        f"research_result_{diff_ticker}_"
                         f"{old_file.name}_{new_file.name}_{index}"
                     )
 
@@ -914,7 +989,7 @@ else:
                 ):
 
                     assessment = load_assessment(
-                        ticker=ticker,
+                        ticker=diff_ticker,
                         section="Item 1A - Risk Factors",
                         change_type="Revised",
                         old_disclosure=item["old"],
@@ -954,7 +1029,7 @@ else:
                     ):
 
                         current_id = make_assessment_id(
-                            ticker,
+                            diff_ticker,
                             "Item 1A - Risk Factors",
                             "Revised",
                             item["old"],
