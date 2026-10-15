@@ -21,6 +21,15 @@ from src.change_detector import calculate_financial_changes
 from src.filing_retrieval import get_recent_10k_with_urls
 from src.ai_analyzer import analyze_disclosure
 from src.research_engine import assess_research_priority
+from src.research_storage import (
+    save_assessment,
+    load_assessment,
+    make_assessment_id,
+)
+from src.research_ranking import (
+    build_ranking_rows,
+    rank_assessments,
+)
 
 from research import (
     get_stock_data,
@@ -529,6 +538,21 @@ else:
                             f"{old_file.name}_{new_file.name}_{index}"
                         )
 
+                        if research_key not in st.session_state:
+
+                            cached_assessment = load_assessment(
+                                ticker=ticker,
+                                section="Item 1A - Risk Factors",
+                                change_type="Revised",
+                                old_disclosure=item["old"],
+                                new_disclosure=item["new"]
+                            )
+
+                            if cached_assessment is not None:
+                                st.session_state[
+                                    research_key
+                                ] = cached_assessment
+
                         if st.button(
                             "Assess Research Priority",
                             key=research_key + "_button"
@@ -548,7 +572,7 @@ else:
                                     st.session_state[
                                         research_key
                                     ] = assessment
-
+                                    save_assessment(assessment)
                                 except Exception as error:
                                     st.error(
                                         "Research assessment failed: "
@@ -627,6 +651,182 @@ else:
                                 "the original SEC filing."
                             )
 
+
+                st.markdown("### Research Priority Ranking")
+
+                saved_assessments = []
+
+                # Save existing session results to persistent storage.
+                for index, item in enumerate(
+                    wording_changes,
+                    start=1
+                ):
+                    session_key = (
+                        f"research_result_{ticker}_"
+                        f"{old_file.name}_{new_file.name}_{index}"
+                    )
+
+                    if session_key in st.session_state:
+                        save_assessment(
+                            st.session_state[session_key]
+                        )
+
+                for index, item in enumerate(
+                    wording_changes,
+                    start=1
+                ):
+
+                    assessment = load_assessment(
+                        ticker=ticker,
+                        section="Item 1A - Risk Factors",
+                        change_type="Revised",
+                        old_disclosure=item["old"],
+                        new_disclosure=item["new"]
+                    )
+
+                    if assessment is not None:
+                        saved_assessments.append(assessment)
+
+                # Build ranking rows with real disclosure numbers.
+                # Unassessed disclosures remain identifiable.
+
+                ranked_assessments = rank_assessments(
+                    saved_assessments
+                )
+
+                ranking_rows = []
+
+                for rank, assessment in enumerate(
+                    ranked_assessments,
+                    start=1
+                ):
+
+                    assessment_id = make_assessment_id(
+                        assessment.ticker,
+                        assessment.section,
+                        assessment.change_type,
+                        assessment.old_disclosure,
+                        assessment.new_disclosure
+                    )
+
+                    revision_number = None
+
+                    for index, item in enumerate(
+                        wording_changes,
+                        start=1
+                    ):
+
+                        current_id = make_assessment_id(
+                            ticker,
+                            "Item 1A - Risk Factors",
+                            "Revised",
+                            item["old"],
+                            item["new"]
+                        )
+
+                        if current_id == assessment_id:
+                            revision_number = index
+                            break
+
+                    ranking_rows.append({
+                        "Rank": rank,
+                        "Revision": revision_number,
+                        "Significance": assessment.significance,
+                        "Research Priority": assessment.research_priority,
+                        "Evidence Count": len(assessment.evidence),
+                        "Rationale": assessment.rationale,
+                        "Status": "Assessed"
+                    })
+
+                assessed_revision_numbers = {
+                    row["Revision"]
+                    for row in ranking_rows
+                }
+
+                for index, item in enumerate(
+                    wording_changes,
+                    start=1
+                ):
+
+                    if index not in assessed_revision_numbers:
+
+                        ranking_rows.append({
+                            "Rank": None,
+                            "Revision": index,
+                            "Significance": "Not Assessed",
+                            "Research Priority": "Not Assessed",
+                            "Evidence Count": 0,
+                            "Rationale": "",
+                            "Status": "Pending"
+                        })
+
+
+
+                assessed_count = len(saved_assessments)
+
+                col_a, col_b, col_c = st.columns(3)
+
+                col_a.metric(
+                    "Total Wording Changes",
+                    len(wording_changes)
+                )
+
+                col_b.metric(
+                    "Assessed",
+                    assessed_count
+                )
+
+                col_c.metric(
+                    "Not Assessed",
+                    len(wording_changes) - assessed_count
+                )
+
+                st.caption(
+                    "Only saved AI assessments are ranked. "
+                    "Unassessed disclosures are not automatically "
+                    "classified as Low Priority."
+                )
+
+
+                if ranking_rows:
+
+                    priority_filter = st.selectbox(
+                        "Filter by Research Priority",
+                        [
+                            "All",
+                            "High",
+                            "Medium",
+                            "Low",
+                            "Not Assessed"
+                        ],
+                        key="research_priority_filter"
+                    )
+
+                    if priority_filter == "All":
+                        filtered_rows = ranking_rows
+                    else:
+                        filtered_rows = [
+                            row for row in ranking_rows
+                            if row["Research Priority"]
+                            == priority_filter
+                        ]
+
+                    st.dataframe(
+                        filtered_rows,
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+                    st.caption(
+                        f"Showing {len(filtered_rows)} of "
+                        f"{len(ranking_rows)} disclosure changes."
+                    )
+
+
+                else:
+                    st.info(
+                        "No wording changes available for ranking."
+                    )
 
                 with st.expander(
                     f"Unmatched Added ({matched['added_count']})"

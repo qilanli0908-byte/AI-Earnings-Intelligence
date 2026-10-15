@@ -40,6 +40,16 @@ Research priority categories:
 - Medium
 - High
 
+STRICT EVIDENCE QUOTATION RULES:
+
+- Every evidence item must be an exact, contiguous substring copied from either old_disclosure or new_disclosure.
+- Do not include labels such as "Old disclosure:", "New disclosure:", "Before:", or "After:" in evidence strings.
+- Do not add quotation marks around the copied text unless those quotation marks are part of the original disclosure.
+- Do not use ellipses (...) to shorten a quotation unless the ellipses appear in the original disclosure.
+- Do not paraphrase, summarize, correct grammar, or change punctuation inside evidence strings.
+- If a valid exact quotation cannot be identified, return an empty evidence list rather than inventing one.
+- Before returning JSON, verify that each evidence string can be found verbatim in at least one supplied disclosure.
+
 Return ONLY a valid JSON object with these exact keys:
 
 {

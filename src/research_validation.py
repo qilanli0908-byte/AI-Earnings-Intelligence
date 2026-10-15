@@ -51,10 +51,10 @@ def validate_research_assessment(
             )
 
         if not any(quote in source for source in source_texts):
-            raise ValueError(
-                "Evidence quotation was not found in the "
-                "provided disclosure text."
-            )
+           raise ValueError(
+    "Evidence quotation was not found in the provided disclosure text. "
+    f"Rejected quotation: {quote[:120]!r}"
+)
 
     if not isinstance(assessment.research_questions, list):
         raise ValueError("Research questions must be a list.")
