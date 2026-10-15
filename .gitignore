@@ -42,3 +42,6 @@ data/filings/
 data/research_assessments/
 # Local investment thesis data
 data/theses/
+# Local PDF previews
+memo_preview.pdf
+memo_enhanced_preview.pdf

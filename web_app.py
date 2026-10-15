@@ -56,6 +56,7 @@ from src.thesis_storage import load_theses
 from src.thesis_integration import monitor_company_theses
 from src.brief_integrity import validate_brief_integrity
 from src.brief_integrity_ui import render_integrity_report
+from src.memo_export import export_investment_memo
 
 # --------------------------------------------------
 # Page Settings
@@ -1005,6 +1006,54 @@ else:
                         )
 
                     render_integrity_report(integrity_report)
+
+                    # Day 15: Investment Memo PDF Export
+                    st.divider()
+
+                    st.subheader("Investment Memo Export")
+
+                    st.caption(
+                        "Download an evidence-linked research memorandum "
+                        "containing financial data, SEC filing sources, "
+                        "investment theses, and integrity warnings."
+                    )
+
+                    if integrity_report.passed:
+
+                        try:
+                            memo_pdf = export_investment_memo(
+                                brief=brief,
+                                integrity_report=integrity_report,
+                            )
+
+                            st.download_button(
+                                label="Download Investment Memo (PDF)",
+                                data=memo_pdf,
+                                file_name=(
+                                    f"{profile_ticker}_Investment_Memo.pdf"
+                                ),
+                                mime="application/pdf",
+                                key=f"download_memo_{profile_ticker}",
+                                use_container_width=True,
+                            )
+
+                            st.caption(
+                                "Research memorandum generated from "
+                                "the currently selected company. "
+                                "Human review remains required."
+                            )
+
+                        except ValueError as error:
+                            st.error(
+                                f"PDF export unavailable: {error}"
+                            )
+
+                    else:
+                        st.warning(
+                            "PDF export is disabled because the "
+                            "Research Brief did not pass its "
+                            "structural integrity check."
+                        )
 
 
                 except Exception as error:

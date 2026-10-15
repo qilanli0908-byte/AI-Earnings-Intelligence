@@ -156,17 +156,66 @@ def build_research_brief(
                 )
             )
 
-    thesis_summary = (
-        "\n".join(
-            f"{thesis.thesis_type} [{thesis.thesis_id}]: "
-            f"{thesis.statement} "
-            f"Hypotheses: "
-            f"{'; '.join(h.description + ' (' + h.status + ')' for h in thesis.hypotheses) or 'None'}"
-            for thesis in theses
-        )
-        if theses
-        else "No saved investment theses."
-    )
+
+    # Build a structured thesis summary.
+    # Only use information already saved in the thesis objects.
+    thesis_lines = []
+
+    if not theses:
+        thesis_summary = "No saved investment theses."
+
+    else:
+        for thesis in theses:
+            thesis_lines.extend([
+                f"{thesis.thesis_type.upper()} THESIS",
+                f"Thesis ID: {thesis.thesis_id}",
+                f"Core Statement: {thesis.statement}",
+                f"Supporting Evidence: {len(thesis.evidence)} saved item(s)",
+                f"Key Hypotheses: {len(thesis.hypotheses)} saved item(s)",
+            ])
+
+            if thesis.evidence:
+                thesis_lines.append("Evidence Details:")
+
+                for index, evidence in enumerate(
+                    thesis.evidence,
+                    start=1,
+                ):
+                    thesis_lines.append(
+                        f"{index}. {evidence.description} "
+                        f"[Original status: {evidence.status}; "
+                        f"brief requires independent review]"
+                    )
+            else:
+                thesis_lines.append(
+                    "Evidence Details: No saved supporting evidence."
+                )
+
+            if thesis.hypotheses:
+                thesis_lines.append("Hypothesis Details:")
+
+                for index, hypothesis in enumerate(
+                    thesis.hypotheses,
+                    start=1,
+                ):
+                    thesis_lines.append(
+                        f"{index}. {hypothesis.description} "
+                        f"[{hypothesis.status}]"
+                    )
+            else:
+                thesis_lines.append(
+                    "Hypothesis Details: No saved hypotheses."
+                )
+
+            thesis_lines.append(
+                "Research Limitation: This thesis is not "
+                "automatically validated by the financial signal."
+            )
+
+            thesis_lines.append("")
+
+        thesis_summary = "\n".join(thesis_lines).strip()
+
 
     sections.append(
         BriefSection(
