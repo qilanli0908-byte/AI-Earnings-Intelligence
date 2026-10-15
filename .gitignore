@@ -40,3 +40,5 @@ Thumbs.db
 data/filings/
 # Local AI research assessment cache
 data/research_assessments/
+# Local investment thesis data
+data/theses/
