@@ -2,6 +2,7 @@
 import requests
 import pandas as pd
 import time
+from decimal import Decimal, ROUND_HALF_UP
 
 # Replace with your own contact information
 HEADERS = {
@@ -247,6 +248,7 @@ def get_sec_financials(ticker):
         ]
     ].tail(4).copy()
 
+
     # Round only numerical financial metrics.
     numeric_columns = [
         "Revenue ($B)",
@@ -255,9 +257,23 @@ def get_sec_financials(ticker):
         "Net Margin (%)"
     ]
 
-    result[numeric_columns] = result[numeric_columns].round(2)
+    def round_decimal(value):
+        if pd.isna(value):
+            return float("nan")
+
+        return float(
+            Decimal(str(value)).quantize(
+                Decimal("0.01"),
+                rounding=ROUND_HALF_UP
+            )
+        )
+
+    result[numeric_columns] = result[numeric_columns].apply(
+        lambda column: column.map(round_decimal)
+    )
 
     return result
+
 
 
 
