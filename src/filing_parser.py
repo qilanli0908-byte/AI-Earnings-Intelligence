@@ -130,56 +130,104 @@ def find_section_candidates(text, item_number):
     return matches
 
 def extract_section(text, start_item, end_item):
-    """Extract a section conservatively, without assuming exactly two headings.
+    """Conservative extraction; anchor canonical headings where identifiable.
 
-    A candidate must be followed by the next target heading, contain substantial
-    body text, and not contain another standalone heading for the start item.
-    If multiple plausible body spans remain, refuse to guess.
+    Avoid treating a body cross-reference such as 'Item 1A\n. Such attacks'
+    as a new section. Ambiguous matches still raise for manual review.
     """
     if not text:
         raise ValueError("Filing text is empty.")
-
     starts = find_section_candidates(text, start_item)
     ends = find_section_candidates(text, end_item)
     if not starts or not ends:
-        raise ValueError(
-            f"Missing section heading: Item {start_item} ({len(starts)}), "
-            f"Item {end_item} ({len(ends)})."
-        )
+        raise ValueError(f"Missing section heading: Item {start_item} ({len(starts)}), Item {end_item} ({len(ends)}).")
 
-    # Table-of-contents rows are generally short and close together; actual
-    # report sections should contain meaningful prose before the next heading.
+    # Accept title case and uppercase, but require the actual canonical title.
+    # Exclude table-of-contents entries: their title is followed by a page number.
+    titles = {
+        "1A": r"RISK[ \t]+FACTORS\b",
+        "1B": r"UNRESOLVED[ \t]+STAFF[ \t]+COMMENTS\b",
+        "7": r"MANAGEMENT[’']S[ \t]+DISCUSSION[ \t]+AND[ \t]+ANALYSIS\b",
+        "7A": r"QUANTITATIVE[ \t]+AND[ \t]+QUALITATIVE[ \t]+DISCLOSURES?\b",
+    }
+
+    def canonical(candidate, item):
+        heading = candidate["heading"]
+        prefix = re.match(r"^ITEM[ \t]+" + re.escape(item) +
+                          r"(?![A-Za-z0-9])[ \t]*[.\-:–—]?[ \t]*", heading, re.I)
+        if not prefix:
+            return False
+        remainder = heading[prefix.end():].strip()
+        following_lines = text[candidate["end"]:].split("\n", 3)
+        if not remainder:
+            remainder = following_lines[1].strip() if len(following_lines) > 1 else ""
+            after_title = following_lines[2].strip() if len(following_lines) > 2 else ""
+        else:
+            after_title = following_lines[1].strip() if len(following_lines) > 1 else ""
+        title_pattern = titles.get(item.upper())
+        if not title_pattern or not re.match(title_pattern, remainder, re.I):
+            return False
+        # TOC entries have a standalone page number immediately after the title.
+        if re.fullmatch(r"\d{1,3}", after_title):
+            return False
+        # Narrative references often end with a quote/comma on the next line.
+        if after_title.startswith((".", ",", "\"", "”", "’", "\'")):
+            return False
+        return True
+
+    canonical_starts = [c for c in starts if canonical(c, start_item)]
+    canonical_ends = [c for c in ends if canonical(c, end_item)]
+    if len(canonical_starts) != 1 or len(canonical_ends) != 1:
+        raise ValueError(
+            f"Canonical heading ambiguity for Item {start_item} / Item {end_item}: "
+            f"{len(canonical_starts)} starts, {len(canonical_ends)} ends. Manual review required."
+        )
+    starts, ends = canonical_starts, canonical_ends
+
     possible = []
-    for i, candidate in enumerate(starts):
-        next_start = starts[i + 1]["start"] if i + 1 < len(starts) else len(text)
-        following_ends = [
-            end for end in ends
-            if candidate["start"] < end["start"] < next_start
-        ]
-        if not following_ends:
+    for candidate in starts:
+        following = [e for e in ends if e["start"] > candidate["start"]]
+        if not following:
             continue
-        end = following_ends[0]
+        end = following[0]
         body = text[candidate["end"]:end["start"]].strip()
         if len(body) < 1000:
             continue
-        # Reject a likely contents entry linking to a later body heading.
-        # Prefer substantial paragraph-like prose over lists of short TOC lines.
         lines = [line.strip() for line in body.splitlines() if line.strip()]
-        long_lines = sum(len(line) >= 80 for line in lines)
-        if len(body) < 3000 and long_lines < 3:
+        if len(body) < 3000 and sum(len(line) >= 80 for line in lines) < 3:
             continue
         possible.append((candidate, end, body))
-
     if len(possible) != 1:
-        diagnostics = [
-            (entry[0]["start"], entry[1]["start"], len(entry[2]))
-            for entry in possible
-        ]
-        raise ValueError(
-            f"Ambiguous Item {start_item} to Item {end_item} extraction: "
-            f"{len(possible)} plausible body ranges; "
-            f"positions/lengths={diagnostics}. Manual review required."
-        )
-
+        diagnostics = [(a["start"], b["start"], len(body)) for a,b,body in possible]
+        raise ValueError(f"Ambiguous Item {start_item} to Item {end_item} extraction: "
+                         f"{len(possible)} plausible ranges; {diagnostics}. Manual review required.")
     start, end, _ = possible[0]
     return text[start["start"]:end["start"]].strip()
+
+
+# Legacy EDGAR filings sometimes split ITEM and its number across lines.
+# This fallback is deliberately narrow: it runs only when the normal parser
+# cannot find either heading, and still requires canonical title text.
+_original_extract_section = extract_section
+
+
+def extract_section(text, start_item, end_item):
+    if (start_item, end_item) != ("7", "7A") or find_section_candidates(text, "7"):
+        return _original_extract_section(text, start_item, end_item)
+    legacy_start = re.compile(
+        r"(?im)^ITEM\n7\.\s+MANAGEMENT[’']S\s+DISCUSSION\s+AND\s+ANALYSIS\s+OF\s+FINANCIAL\s+CONDITION\s+AND\s+RESULTS\s+OF\s+OPERATIONS\b"
+    )
+    legacy_end = re.compile(
+        r"(?im)^ITEM\n7A\.\s+QUANTITATIVE\s+AND\s+QUALITATIVE\s+DISCLOSURES?\s+ABOUT\s+MARKET\s+RISK\b"
+    )
+    starts = list(legacy_start.finditer(text))
+    ends = list(legacy_end.finditer(text))
+    # A TOC entry is followed by a standalone page number, unlike the body.
+    starts = [m for m in starts if not re.match(r"\s*\n\d{1,3}\s*(?:\n|$)", text[m.end():])]
+    ends = [m for m in ends if not re.match(r"\s*\n\d{1,3}\s*(?:\n|$)", text[m.end():])]
+    if len(starts) != 1 or len(ends) != 1 or ends[0].start() <= starts[0].start():
+        raise ValueError("Legacy Item 7 / 7A heading ambiguity; manual review required")
+    result = text[starts[0].start():ends[0].start()].strip()
+    if len(result) < 1000:
+        raise ValueError("Legacy Item 7 extraction is unexpectedly short; manual review required")
+    return result
