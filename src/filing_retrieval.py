@@ -186,3 +186,23 @@ def download_10k(ticker, filing, output_dir="data/filings"):
     print(f"File size: {filepath.stat().st_size:,} bytes")
 
     return filepath
+
+
+
+def ensure_recent_10k_downloaded(ticker, limit=2, output_dir="data/filings"):
+    """Download recent annual filings into a ticker-specific directory.
+
+    Raises if SEC lists fewer than the requested number; existing files are reused.
+    Does not call any paid AI API.
+    """
+    if not isinstance(limit, int) or limit < 1:
+        raise ValueError("limit must be a positive integer.")
+    ticker = ticker.strip().upper()
+    filings = get_recent_10k_with_urls(ticker, limit=limit)
+    if len(filings) < limit:
+        raise ValueError(f"SEC lists only {len(filings)} recent 10-K(s) for {ticker}; {limit} required.")
+    paths = []
+    # Download older filing first; comparison still sorts accession filenames.
+    for _, filing in filings.iloc[::-1].iterrows():
+        paths.append(download_10k(ticker, filing, output_dir=output_dir))
+    return paths
