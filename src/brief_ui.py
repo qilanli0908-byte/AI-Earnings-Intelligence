@@ -8,7 +8,7 @@ def render_research_brief(brief: ResearchBrief) -> None:
     """
     Display a structured, evidence-linked research brief.
     """
-    st.header(f"{brief.ticker} Research Brief")
+    st.subheader("Research Brief")
 
     st.caption(
         f"{brief.company_name} | "
@@ -64,6 +64,27 @@ def render_research_brief(brief: ResearchBrief) -> None:
                     else:
                         st.write(line)
 
+            elif section.title == "Investment Theses":
+                # Preserve builder line breaks; Streamlit st.write collapses them.
+                for line in section.summary.splitlines():
+                    line = line.strip()
+                    if not line:
+                        st.divider()
+                    elif line in ("BULL THESIS", "BEAR THESIS"):
+                        st.markdown(f"#### {line.title()}")
+                    elif line.startswith(("Core Statement:", "Research Limitation:")):
+                        label, value = line.split(":", 1)
+                        st.markdown(f"**{label}:**")
+                        st.write(value.strip())
+                    elif line.startswith(("Thesis ID:", "Supporting Evidence:", "Key Hypotheses:", "Evidence Details:", "Hypothesis Details:")):
+                        label, value = line.split(":", 1)
+                        st.markdown(f"**{label}:** {value.strip()}")
+                    else:
+                        st.write(line)
+            elif section.title == "Thesis Monitoring":
+                for line in section.summary.splitlines():
+                    if line.strip():
+                        st.write(line)
             else:
                 st.write(section.summary)
 

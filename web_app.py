@@ -1,6 +1,7 @@
 
 import streamlit as st
 import pandas as pd
+from html import escape
 
 from pathlib import Path
 
@@ -83,16 +84,21 @@ selected_ticker, selected_page = render_dashboard_sidebar()
 
 render_dashboard_header()
 
-if selected_page == "Overview":
-    st.subheader(f"{selected_ticker} | Company Overview")
-    try:
-        overview_info = get_company_info(selected_ticker)
-        st.write("**Company:**", overview_info.get("longName", selected_ticker))
-        st.write("**Sector:**", overview_info.get("sector", "N/A"))
-        st.write("**Industry:**", overview_info.get("industry", "N/A"))
-    except Exception as error:
-        st.warning(f"Company identity is temporarily unavailable: {error}")
-    st.divider()
+# Day 20: consistent, compact page orientation; research logic is unchanged.
+PAGE_DESCRIPTIONS = {
+    "Overview": "Company identity, financial trends, disclosure changes, and research signals.",
+    "Financial Analysis": "Market performance, SEC Company Facts, and rule-based financial signals.",
+    "Filing Comparison": "Compare original annual 10-K filings and review Item 1A changes.",
+    "Thesis Tracker": "Monitor evidence and assumptions against financial developments.",
+    "Research Brief": "Review an evidence-linked brief with integrity checks.",
+    "Investment Memo": "Validate source integrity and export a PDF research memorandum.",
+}
+st.markdown(f'<div class="ei-page-eyebrow">{escape(selected_page.upper())} / SEC RESEARCH</div>', unsafe_allow_html=True)
+st.title(f"{selected_ticker} | { 'Company Overview' if selected_page == 'Overview' else selected_page }")
+st.markdown(f'<div class="ei-page-subtitle">{escape(PAGE_DESCRIPTIONS[selected_page])}</div>', unsafe_allow_html=True)
+
+# The SEC-backed CompanyProfile renders the company identity on Overview.
+# Avoid a duplicate yfinance identity card above it.
 
 
 if selected_page == "Financial Analysis":
@@ -103,7 +109,8 @@ if selected_page == "Financial Analysis":
 
     ticker = selected_ticker
 
-    if st.button("Analyze"):
+    st.caption("Click Analyze to retrieve the selected company's market and financial data. No AI disclosure analysis is triggered here.")
+    if st.button("Analyze", type="primary"):
 
         ticker = ticker.strip().upper()
 
@@ -416,8 +423,8 @@ elif selected_page in (
     if len(filing_files) < 2 and selected_page != "Filing Comparison":
 
         st.info(
-            "Two downloaded 10-K filings are required. "
-            "Please download the filings first."
+            f"{diff_ticker} needs two locally cached annual 10-K filings for this research view. "
+            "Open Filing Comparison, choose two SEC filings, and click Compare Selected 10-Ks first."
         )
 
     else:
@@ -510,6 +517,9 @@ elif selected_page in (
             if selected_page == "Filing Comparison"
             else True
         )
+
+        if not run_comparison and selected_page == "Filing Comparison":
+            st.info("Select an older and a newer annual 10-K above, then click Compare Selected 10-Ks to begin.")
 
         if run_comparison:
 
@@ -607,6 +617,8 @@ elif selected_page in (
                         )
 
                         st.markdown("### Revised Disclosures")
+                        if not wording_changes:
+                            st.info("No substantive wording revisions were matched in this filing pair. Review added and removed disclosures below.")
 
                         for index, item in enumerate(
                             wording_changes,
@@ -776,9 +788,7 @@ elif selected_page in (
                     # ==========================================
 
                     if selected_page == "Overview":
-                        st.divider()
-
-                        st.header("Company Research Signals")
+                        st.markdown("### Company Research Signals")
 
                         st.caption(
                             "Integrated financial and disclosure research "
@@ -822,9 +832,7 @@ elif selected_page in (
                             # Research overview
                             # --------------------------------------
 
-                            st.subheader(
-                                f"{diff_ticker} Research Overview"
-                            )
+                            st.markdown("#### Research Overview")
 
                             overview_col1, overview_col2, overview_col3 = (
                                 st.columns(3)

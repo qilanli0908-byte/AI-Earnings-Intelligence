@@ -108,6 +108,7 @@ def validate_brief_integrity(
                     or parsed.hostname not in (
                         "sec.gov",
                         "www.sec.gov",
+                        "data.sec.gov",
                     )
                 ):
                     errors.append(

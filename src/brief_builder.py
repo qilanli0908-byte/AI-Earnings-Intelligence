@@ -61,6 +61,11 @@ def build_research_brief(
     )
 
     # 2. Financial Momentum
+    # Company Facts is the source dataset, not independent verification of
+    # each displayed metric or the derivation of growth/margin.
+    cik_digits = str(profile.identity.cik).strip()
+    if not cik_digits.isdecimal() or int(cik_digits) <= 0:
+        raise ValueError("A valid numeric SEC CIK is required for financial attribution")
     financial = profile.financial
 
     financial_summary = (
@@ -83,6 +88,15 @@ def build_research_brief(
                     ),
                     evidence_type="SEC Financial",
                     verification_status="Requires Review",
+                    source_url=(
+                        "https://data.sec.gov/api/xbrl/companyfacts/"
+                        f"CIK{int(cik_digits):010d}.json"
+                    ),
+                    citation=(
+                        f"SEC EDGAR Company Facts, CIK {int(cik_digits):010d}; "
+                        f"fiscal year ended {financial.fiscal_year_end}. "
+                        "Metric/tag and period mapping require human review."
+                    ),
                 )
             ],
         )

@@ -288,6 +288,7 @@ def export_investment_memo(
                     and parsed.hostname in (
                         "sec.gov",
                         "www.sec.gov",
+                        "data.sec.gov",
                     )
                 ):
                     link_markup = (
