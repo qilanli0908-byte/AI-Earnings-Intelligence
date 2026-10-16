@@ -206,3 +206,43 @@ def ensure_recent_10k_downloaded(ticker, limit=2, output_dir="data/filings"):
     for _, filing in filings.iloc[::-1].iterrows():
         paths.append(download_10k(ticker, filing, output_dir=output_dir))
     return paths
+
+
+def get_historical_10k_with_urls(ticker):
+    """List original 10-Ks in recent and archived SEC submission indexes.
+
+    FY is derived from reportDate, not filingDate. Excludes 10-K/A.
+    """
+    submissions = get_company_submissions(ticker)
+    indexes = [submissions["filings"]["recent"]]
+    for archive in submissions["filings"].get("files", []):
+        name = archive.get("name", "")
+        if not name:
+            continue
+        response = requests.get(
+            f"https://data.sec.gov/submissions/{name}",
+            headers=HEADERS, timeout=30,
+        )
+        response.raise_for_status()
+        indexes.append(response.json())
+        time.sleep(0.15)
+
+    frames = [pd.DataFrame(index) for index in indexes]
+    filings = pd.concat(frames, ignore_index=True)
+    filings = filings.loc[filings["form"].eq("10-K")].copy()
+    filings = filings.dropna(subset=["reportDate", "accessionNumber", "primaryDocument"])
+    filings = filings.loc[filings["reportDate"].astype(str).str.match(r"^\d{4}-\d{2}-\d{2}$")]
+    filings = filings.drop_duplicates(subset=["accessionNumber"])
+    filings["Fiscal Year"] = filings["reportDate"].str[:4].astype(int)
+    filings = filings.sort_values(["reportDate", "filingDate"], ascending=False)
+    cik = get_cik(ticker.strip().upper())
+    filings["Document URL"] = [
+        build_filing_document_url(cik, accession, document)
+        for accession, document in zip(
+            filings["accessionNumber"], filings["primaryDocument"]
+        )
+    ]
+    return filings[[
+        "form", "Fiscal Year", "filingDate", "reportDate",
+        "accessionNumber", "primaryDocument", "Document URL"
+    ]].reset_index(drop=True)

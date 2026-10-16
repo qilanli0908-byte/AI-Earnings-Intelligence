@@ -130,56 +130,56 @@ def find_section_candidates(text, item_number):
     return matches
 
 def extract_section(text, start_item, end_item):
+    """Extract a section conservatively, without assuming exactly two headings.
+
+    A candidate must be followed by the next target heading, contain substantial
+    body text, and not contain another standalone heading for the start item.
+    If multiple plausible body spans remain, refuse to guess.
     """
-    Extract a 10-K section between two item headings.
+    if not text:
+        raise ValueError("Filing text is empty.")
 
-    This initial implementation expects:
-    - One table-of-contents occurrence
-    - One main-body occurrence
-    - A valid start/end section order
-
-    Ambiguous documents raise ValueError.
-    """
-
-    start_candidates = find_section_candidates(
-        text,
-        start_item
-    )
-
-    end_candidates = find_section_candidates(
-        text,
-        end_item
-    )
-
-    # For now, require exactly two occurrences:
-    # one in the contents and one in the main report.
-    if len(start_candidates) != 2:
+    starts = find_section_candidates(text, start_item)
+    ends = find_section_candidates(text, end_item)
+    if not starts or not ends:
         raise ValueError(
-            f"Expected 2 candidates for Item {start_item}, "
-            f"found {len(start_candidates)}."
+            f"Missing section heading: Item {start_item} ({len(starts)}), "
+            f"Item {end_item} ({len(ends)})."
         )
 
-    if len(end_candidates) != 2:
+    # Table-of-contents rows are generally short and close together; actual
+    # report sections should contain meaningful prose before the next heading.
+    possible = []
+    for i, candidate in enumerate(starts):
+        next_start = starts[i + 1]["start"] if i + 1 < len(starts) else len(text)
+        following_ends = [
+            end for end in ends
+            if candidate["start"] < end["start"] < next_start
+        ]
+        if not following_ends:
+            continue
+        end = following_ends[0]
+        body = text[candidate["end"]:end["start"]].strip()
+        if len(body) < 1000:
+            continue
+        # Reject a likely contents entry linking to a later body heading.
+        # Prefer substantial paragraph-like prose over lists of short TOC lines.
+        lines = [line.strip() for line in body.splitlines() if line.strip()]
+        long_lines = sum(len(line) >= 80 for line in lines)
+        if len(body) < 3000 and long_lines < 3:
+            continue
+        possible.append((candidate, end, body))
+
+    if len(possible) != 1:
+        diagnostics = [
+            (entry[0]["start"], entry[1]["start"], len(entry[2]))
+            for entry in possible
+        ]
         raise ValueError(
-            f"Expected 2 candidates for Item {end_item}, "
-            f"found {len(end_candidates)}."
+            f"Ambiguous Item {start_item} to Item {end_item} extraction: "
+            f"{len(possible)} plausible body ranges; "
+            f"positions/lengths={diagnostics}. Manual review required."
         )
 
-    # The second occurrence is the body candidate.
-    start = start_candidates[1]["start"]
-    end = end_candidates[1]["start"]
-
-    if end <= start:
-        raise ValueError(
-            f"Invalid section order: Item {start_item} "
-            f"must appear before Item {end_item}."
-        )
-
-    section_text = text[start:end].strip()
-
-    if len(section_text) < 1000:
-        raise ValueError(
-            f"Extracted Item {start_item} appears too short."
-        )
-
-    return section_text
+    start, end, _ = possible[0]
+    return text[start["start"]:end["start"]].strip()

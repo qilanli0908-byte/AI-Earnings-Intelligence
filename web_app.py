@@ -27,7 +27,7 @@ from src.company_profile_ui import render_company_profile
 
 from src.filing_retrieval import get_company_submissions
 
-from src.filing_retrieval import get_recent_10k_with_urls
+from src.filing_retrieval import get_recent_10k_with_urls, get_historical_10k_with_urls, download_10k
 from src.ai_analyzer import analyze_disclosure
 from src.research_engine import assess_research_priority
 from src.research_storage import (
@@ -73,6 +73,11 @@ st.set_page_config(
     layout="wide"
 )
 apply_dashboard_style()
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_historical_filings(ticker):
+    return get_historical_10k_with_urls(ticker)
+
 
 selected_ticker, selected_page = render_dashboard_sidebar()
 
@@ -408,7 +413,7 @@ elif selected_page in (
         filing_folder.glob("*_10K.html")
     )
 
-    if len(filing_files) < 2:
+    if len(filing_files) < 2 and selected_page != "Filing Comparison":
 
         st.info(
             "Two downloaded 10-K filings are required. "
@@ -431,15 +436,77 @@ elif selected_page in (
             st.session_state.show_filing_diff = False
 
         if selected_page == "Filing Comparison":
-            if st.button(
-                "Compare Annual Risk Disclosures",
-                key="run_filing_diff"
-            ):
-                st.session_state.show_filing_diff = True
+            st.caption("Choose any two available original annual 10-K filings. Fiscal years use SEC reportDate.")
+            try:
+                historical = cached_historical_filings(diff_ticker)
+                if len(historical) < 2:
+                    st.warning("SEC lists fewer than two original annual 10-K filings.")
+                    st.stop()
+                options = historical["accessionNumber"].tolist()
+                by_accession = {
+                    row["accessionNumber"]: row
+                    for _, row in historical.iterrows()
+                }
+                def filing_label(accession):
+                    row = by_accession[accession]
+                    return (
+                        f"FY{row['Fiscal Year']} | Period ended {row['reportDate']} "
+                        f"| Filed {row['filingDate']} | {accession}"
+                    )
+                with st.form(key=f"historical_compare_{diff_ticker}"):
+                    left, right = st.columns(2)
+                    with left:
+                        previous_accession = st.selectbox(
+                            "Previous 10-K", options, index=1,
+                            format_func=filing_label,
+                        )
+                    with right:
+                        latest_accession = st.selectbox(
+                            "Comparison 10-K", options, index=0,
+                            format_func=filing_label,
+                        )
+                    submitted = st.form_submit_button("Compare Selected 10-Ks")
+                if submitted:
+                    previous = by_accession[previous_accession]
+                    latest = by_accession[latest_accession]
+                    if previous["reportDate"] >= latest["reportDate"]:
+                        st.error("Choose two distinct filings in chronological order (previous → comparison).")
+                        st.session_state.show_filing_diff = False
+                    else:
+                        with st.spinner("Downloading selected SEC 10-Ks if needed..."):
+                            selected_old = download_10k(diff_ticker, previous)
+                            selected_new = download_10k(diff_ticker, latest)
+                        st.session_state[f"filing_pair_{diff_ticker}"] = (
+                            str(selected_old), str(selected_new),
+                            previous.to_dict(), latest.to_dict(),
+                        )
+                        st.session_state.show_filing_diff = True
+                pair = st.session_state.get(f"filing_pair_{diff_ticker}")
+                if pair and st.session_state.show_filing_diff:
+                    old_meta, new_meta = pair[2], pair[3]
+                    st.markdown(
+                        f"**{diff_ticker}: FY{old_meta['Fiscal Year']} → "
+                        f"FY{new_meta['Fiscal Year']}**"
+                    )
+                    st.caption(
+                        f"Previous period ended {old_meta['reportDate']} "
+                        f"(filed {old_meta['filingDate']}) · "
+                        f"Comparison period ended {new_meta['reportDate']} "
+                        f"(filed {new_meta['filingDate']})"
+                    )
+                    st.markdown(
+                        f"[Previous SEC 10-K]({old_meta['Document URL']}) · "
+                        f"[Comparison SEC 10-K]({new_meta['Document URL']})"
+                    )
+            except Exception as error:
+                st.error(f"Unable to load historical SEC filings: {error}")
+                st.stop()
 
         # Research pages use local SEC filings; AI remains button-triggered only.
         run_comparison = (
-            st.session_state.show_filing_diff
+            (st.session_state.show_filing_diff and bool(
+                st.session_state.get(f"filing_pair_{diff_ticker}")
+            ))
             if selected_page == "Filing Comparison"
             else True
         )
@@ -462,9 +529,22 @@ elif selected_page in (
                             "1B"
                         )
 
-                    # The two downloaded filings are sorted by filename.
-                    old_file = filing_files[-2]
-                    new_file = filing_files[-1]
+                    # Historical selections apply ONLY to Filing Comparison.
+                    # Other research pages retain their existing default pair.
+                    if selected_page == "Filing Comparison":
+                        pair = st.session_state.get(f"filing_pair_{diff_ticker}")
+                        if not pair:
+                            st.info("Select two annual filings and click Compare Selected 10-Ks.")
+                            st.stop()
+                        old_file, new_file = Path(pair[0]), Path(pair[1])
+                    else:
+                        recent_pair = get_recent_10k_with_urls(diff_ticker, limit=2)
+                        if len(recent_pair) < 2:
+                            st.warning("Two recent annual SEC 10-Ks are required.")
+                            st.stop()
+                        old_row, new_row = recent_pair.iloc[1], recent_pair.iloc[0]
+                        old_file = download_10k(diff_ticker, old_row)
+                        new_file = download_10k(diff_ticker, new_row)
 
                     old_text = load_risk_factors(old_file)
                     new_text = load_risk_factors(new_file)
