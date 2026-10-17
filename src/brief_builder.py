@@ -13,6 +13,7 @@ def build_research_brief(
     profile: CompanyProfile,
     theses: list[InvestmentThesis],
     monitoring_results: list[ThesisMonitoringResult],
+    offline_research=None,
 ) -> ResearchBrief:
     """
     Build a deterministic research brief from existing data.
@@ -257,6 +258,51 @@ def build_research_brief(
             summary=monitoring_summary,
         )
     )
+
+    # Optional session-only, clearly labeled offline retrieval demonstration.
+    # Never present candidate passages as validated thesis support.
+    if offline_research is not None:
+        result, inventory = offline_research
+        if result.provider != "MOCK / OFFLINE" or not result.requires_human_review:
+            raise ValueError("Only reviewed offline demo results are permitted")
+        if result.ticker.strip().upper() != ticker or result.thesis_id not in thesis_ids:
+            raise ValueError("Offline research company/thesis mismatch")
+        from src.ai_research_engine import validate_result
+        thesis = next(t for t in theses if t.thesis_id == result.thesis_id)
+        validate_result(result, thesis, inventory)
+        lines = [
+            "OFFLINE MOCK DEMO - NOT LLM ANALYSIS",
+            f"Thesis ID: {result.thesis_id}",
+            f"Assessment: {result.overall_assessment} (not a verified investment conclusion)",
+            "AVAILABLE RESEARCH SOURCES (not established supporting or contradicting evidence).",
+            "FIN = consolidated context; FILING = metadata; PASSAGE = ranked candidate text. Risk-context labels are retrieval hints only.",
+            "Candidate SEC passages are retrieval results, not proof of support or contradiction.",
+            "Supporting evidence established by mock: None.",
+            "Contradicting evidence established by mock: None.",
+        ]
+        from src.ai_deep_thesis import decompose_thesis, map_candidates
+        lines.append("AI DEEP THESIS ANALYSIS - FIVE-STAGE OFFLINE SCAFFOLD")
+        lines.append("1. Thesis Decomposition (saved user hypotheses, not LLM-generated):")
+        hypotheses = decompose_thesis(thesis)
+        for i, hypothesis in enumerate(hypotheses, 1): lines.append(f"H{i}: {hypothesis}")
+        lines.append("2. SEC Evidence Retrieval (candidate mapping only; not proof):")
+        for hypothesis, ids in map_candidates(hypotheses, inventory):
+            lines.append(f"Candidate mapping: {hypothesis} -> {', '.join(ids) if ids else 'No matching candidate'}")
+        lines.append("3. Supporting vs. Contradicting Evidence: Neither established by offline mock.")
+        lines.append("4. Research Gap Identification:")
+        for h in result.hypotheses:
+            lines.append(f"Hypothesis: {h.hypothesis} [{h.assessment}]")
+            lines.append(f"Explanation: {h.explanation}")
+        for gap in result.research_gaps: lines.append(f"Research gap: {gap}")
+        lines.append("5. Evidence-linked Assessment: Insufficient Evidence; no LLM interpretation performed.")
+        for item in result.monitoring_indicators: lines.append(f"Monitor: {item}")
+        lines.append("Human review required. No live API request was made.")
+        demo_evidence = [BriefEvidence(
+            description=(f"Available source {e.evidence_id} - {e.category}: {e.description}".encode("ascii", "replace").decode("ascii")),
+            evidence_type="SEC Filing" if e.evidence_id.startswith("PASSAGE-") else "SEC Financial" if e.evidence_id.startswith("FIN-") else "SEC Filing",
+            verification_status="Requires Review", source_url=e.source_url, citation=e.citation.encode("ascii", "replace").decode("ascii"),
+        ) for e in inventory]
+        sections.append(BriefSection(title="Offline Research Demo", summary="\n".join(lines), evidence=demo_evidence))
 
     return ResearchBrief(
         ticker=ticker,

@@ -49,6 +49,7 @@ from research import (
     generate_commentary
 )
 from src.thesis_monitor_ui import render_thesis_monitoring
+from src.ai_research_ui import render_ai_research
 from src.brief_builder import build_research_brief
 from src.brief_evidence import check_brief_evidence
 from src.brief_ui import render_research_brief
@@ -1070,6 +1071,11 @@ elif selected_page in (
                                 ticker=profile_ticker,
                                 financial_changes=company_changes,
                             )
+                            st.divider()
+                            render_ai_research(
+                                profile=profile,
+                                theses=load_theses(profile_ticker),
+                            )
 
                         # Day 13: Evidence-Linked Research Brief
                         if selected_page == "Research Brief":
@@ -1083,10 +1089,22 @@ elif selected_page in (
                             financial_changes=company_changes,
                         )
 
+                        # Only reuse a manually triggered offline result for this ticker
+                        # and a thesis that still exists in the current company.
+                        offline_research = None
+                        saved_demo = st.session_state.get(f"ai_mock_result_{profile_ticker}")
+                        if saved_demo and len(saved_demo) == 4:
+                            demo_id, demo_result, demo_inventory, _demo_notices = saved_demo
+                            if (demo_result.ticker.strip().upper() == profile_ticker
+                                    and demo_id == demo_result.thesis_id
+                                    and any(t.thesis_id == demo_id and t.statement == demo_result.statement
+                                            for t in brief_theses)):
+                                offline_research = (demo_result, demo_inventory)
                         brief = build_research_brief(
                             profile=profile,
                             theses=brief_theses,
                             monitoring_results=brief_monitoring,
+                            offline_research=offline_research,
                         )
 
                         brief = check_brief_evidence(brief)

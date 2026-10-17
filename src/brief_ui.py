@@ -22,7 +22,7 @@ def render_research_brief(brief: ResearchBrief) -> None:
     )
 
     for section in brief.sections:
-        with st.expander(section.title, expanded=True):
+        with st.expander(section.title, expanded=section.title in ("Financial Momentum", "Investment Theses", "Offline Research Demo")):
             if section.title == "Financial Momentum":
                 import re
 
@@ -90,16 +90,19 @@ def render_research_brief(brief: ResearchBrief) -> None:
 
 
             if section.evidence:
-                st.markdown("**Supporting Evidence / Sources**")
+                st.markdown("**Available Research Sources (not verified thesis evidence)**" if section.title == "Offline Research Demo" else "**Source Documents / Saved Evidence**")
 
                 for index, evidence in enumerate(
                     section.evidence,
                     start=1,
                 ):
-                    st.markdown(
-                        f"**Evidence {index}:** "
-                        f"{evidence.description}"
-                    )
+                    label = "Research Source" if section.title == "Offline Research Demo" else "Item"
+                    with st.expander(f"{label} {index} · {evidence.description[:92]}"):
+                        st.write(evidence.description)
+                        st.caption(f"Type: {evidence.evidence_type} | Status: {evidence.verification_status}")
+                        if evidence.citation: st.caption(f"Citation: {evidence.citation}")
+                        if evidence.source_url: st.link_button("Open SEC source", evidence.source_url)
+                    continue
 
                     st.caption(
                         f"Type: {evidence.evidence_type} | "

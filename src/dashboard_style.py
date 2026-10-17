@@ -105,6 +105,16 @@ def apply_dashboard_style():
     .ei-priority-row .ei-kpi-note { margin-top:.1rem; }
     @media(max-width:1100px) { .ei-profile-identity { grid-template-columns:repeat(3,minmax(0,1fr)); row-gap:1rem; } .ei-identity-primary { grid-column:1/-1; } .ei-kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
     @media(max-width:700px) { .ei-profile-identity { grid-template-columns:1fr; } .ei-identity-primary { grid-column:auto; } .ei-identity-detail { border-left:0; border-top:1px solid #e2e8f0; padding:.6rem .2rem; } .ei-kpi-grid { grid-template-columns:1fr 1fr; } }
+    /* Phase 4.5: calmer research workspace and clearer interaction hierarchy. */
+    [data-testid="stMainBlockContainer"] { max-width:1250px; }
+    [data-testid="stVerticalBlock"] { gap:.8rem; }
+    [data-testid="stExpander"] { background:#fff; border:1px solid #e4eaf2; box-shadow:0 2px 9px rgba(20,38,61,.025); }
+    [data-testid="stExpander"] summary { padding:.35rem .25rem; font-weight:650; color:#223b59; }
+    [data-testid="stAlert"] { border-radius:11px; }
+    [data-testid="stButton"] button { min-height:2.45rem; font-weight:650; }
+    [data-testid="stTabs"] [role="tablist"] { gap:.4rem; border-bottom:1px solid #e2e8f0; }
+    [data-testid="stTabs"] button[role="tab"] { border-radius:8px 8px 0 0; padding:.55rem .9rem; }
+    @media(max-width:760px) { [data-testid="stMainBlockContainer"] { padding:1rem; } }
     </style>
     """, unsafe_allow_html=True)
 

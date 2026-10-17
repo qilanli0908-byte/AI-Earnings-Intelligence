@@ -3,7 +3,7 @@ from io import BytesIO
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
@@ -13,6 +13,7 @@ from reportlab.platypus import (
     Spacer,
     HRFlowable,
     KeepTogether,
+    Table, TableStyle,
 )
 
 from src.brief_models import ResearchBrief
@@ -158,6 +159,8 @@ def export_investment_memo(
         )
     )
 
+    styles.add(ParagraphStyle(name="MemoKicker", parent=styles["MemoSmall"], fontName="Helvetica-Bold", textColor=NAVY, spaceAfter=5))
+    styles.add(ParagraphStyle(name="MemoSource", parent=styles["MemoSmall"], fontSize=7.5, leading=10, spaceAfter=3))
     story = []
 
     def add(text, style="MemoBody"):
@@ -166,7 +169,7 @@ def export_investment_memo(
         )
 
     # Cover / Header
-    add("AI EARNINGS INTELLIGENCE", "MemoSmall")
+    add("AI EARNINGS INTELLIGENCE  /  EQUITY RESEARCH", "MemoKicker")
     add(
         f"{brief.ticker} | Investment Research Memo",
         "MemoTitle",
@@ -206,7 +209,16 @@ def export_investment_memo(
         "MemoDisclaimer",
     )
 
-    story.append(Spacer(1, 16))
+    story.append(Spacer(1, 12))
+    add("RESEARCH AT A GLANCE", "MemoKicker")
+    snapshot = [
+        [Paragraph("COMPANY", styles["MemoSmall"]), Paragraph("FISCAL YEAR END", styles["MemoSmall"]), Paragraph("RESEARCH STATUS", styles["MemoSmall"])],
+        [Paragraph(safe_text(brief.company_name), styles["MemoBody"]), Paragraph(safe_text(brief.fiscal_year_end), styles["MemoBody"]), Paragraph("Human review required", styles["MemoBody"])],
+    ]
+    snapshot_table = Table(snapshot, colWidths=[190, 115, 190], hAlign="LEFT")
+    snapshot_table.setStyle(TableStyle([("BACKGROUND", (0,0),(-1,-1), colors.HexColor("#F3F6FB")), ("BOX",(0,0),(-1,-1),.5,colors.HexColor("#DEE6F0")), ("VALIGN",(0,0),(-1,-1),"TOP"), ("LEFTPADDING",(0,0),(-1,-1),10), ("TOPPADDING",(0,0),(-1,-1),8), ("BOTTOMPADDING",(0,0),(-1,-1),7)]))
+    story.append(snapshot_table)
+    story.append(Spacer(1, 14))
 
     # Research sections
     for section in brief.sections:
@@ -257,25 +269,27 @@ def export_investment_memo(
                 )
 
 
-        for index, evidence in enumerate(
-            section.evidence,
-            start=1,
-        ):
-            add(
-                f"Evidence {index}: {evidence.description}",
-                "MemoBody",
-            )
+        is_inventory = section.title == "Offline Research Demo"
+        if is_inventory and section.evidence:
+            add("APPENDIX  /  AVAILABLE SEC RESEARCH SOURCES", "MemoSection")
+            add("These are context, filing metadata, and retrieved candidates; none is verified thesis support or contradiction.", "MemoSmall")
+        for index, evidence in enumerate(section.evidence, start=1):
+            label = "Research Source" if is_inventory else "Source / Saved Evidence"
+            description = evidence.description
+            if is_inventory and len(description) > 330:
+                description = description[:327].rsplit(" ", 1)[0] + "... [excerpt; open SEC source for full context]"
+            add(f"{label} {index}: {description}", "MemoSource" if is_inventory else "MemoBody")
 
             add(
                 f"Type: {evidence.evidence_type} | "
                 f"Status: {evidence.verification_status}",
-                "MemoSmall",
+                "MemoSource" if is_inventory else "MemoSmall",
             )
 
             if evidence.citation:
                 add(
                     f"Citation: {evidence.citation}",
-                    "MemoSmall",
+                    "MemoSource" if is_inventory else "MemoSmall",
                 )
 
             if evidence.source_url:
@@ -301,7 +315,7 @@ def export_investment_memo(
                     story.append(
                         Paragraph(
                             "SEC Source: " + link_markup,
-                            styles["MemoSmall"],
+                            styles["MemoSource" if is_inventory else "MemoSmall"],
                         )
                     )
                 else:
