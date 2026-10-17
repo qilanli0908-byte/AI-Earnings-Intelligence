@@ -1,4 +1,3 @@
-import time
 """Offline thesis-aware candidate retrieval. Ranking is NOT evidence interpretation."""
 from pathlib import Path
 import re
@@ -55,10 +54,7 @@ def retrieve_filing_candidates(profile, thesis, root=ROOT):
             notices.append(f'{filing.accession_number}: no local cached HTML; skipped (no download).'); continue
         if not 0 < path.stat().st_size <= MAX_FILE_BYTES:
             notices.append(f'{filing.accession_number}: empty or over file size limit; skipped.'); continue
-        start_time = time.perf_counter()
-        print(f"[SEC DEBUG] Starting {filing.accession_number}", flush=True)
         soup = BeautifulSoup(path.read_bytes(), 'html.parser')
-        print(f"[SEC DEBUG] HTML parsed: {time.perf_counter() - start_time:.2f}s", flush=True)
         for tag in soup(['script','style','noscript']): tag.decompose()
         blocks = []
         for tag in soup.find_all(['p','div','td','li']):
@@ -67,7 +63,6 @@ def retrieve_filing_candidates(profile, thesis, root=ROOT):
             if 90 <= len(s) <= 2200: blocks.append(s)
         if not blocks:
             blocks = re.split(r'(?<=[.!?])\s+(?=[A-Z])', ' '.join(soup.stripped_strings))
-        print(f"[SEC DEBUG] Blocks extracted: {len(blocks)} | {time.perf_counter() - start_time:.2f}s", flush=True)
         from src.ai_deep_thesis import near_duplicate
         # Rank first. Comparing every HTML block with every earlier block is quadratic
         # and can make the Streamlit button appear to hang on large 10-K filings.
@@ -81,7 +76,6 @@ def retrieve_filing_candidates(profile, thesis, root=ROOT):
             seen.add(fingerprint)
             ranked.append((ranked_item[0], normalized, *ranked_item[1:]))
         ranked.sort(key=lambda item: -item[0])
-        print(f"[SEC DEBUG] Ranking completed: {len(ranked)} candidates | {time.perf_counter() - start_time:.2f}s", flush=True)
         # Only compare high-ranking candidates with a small retained set.
         deduplicated, retained = [], []
         for item in ranked:

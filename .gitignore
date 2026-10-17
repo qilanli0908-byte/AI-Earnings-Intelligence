@@ -49,3 +49,6 @@ memo_enhanced_preview.pdf
 .day16_backups/
 
 day17_ticker_audit.txt
+
+# Local scratch backups (not release source)
+src/filing_parser_backup.py
