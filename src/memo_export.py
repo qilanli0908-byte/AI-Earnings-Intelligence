@@ -13,7 +13,7 @@ from reportlab.platypus import (
     Spacer,
     HRFlowable,
     KeepTogether,
-    Table, TableStyle,
+    Table, TableStyle, PageBreak,
 )
 
 from src.brief_models import ResearchBrief
@@ -161,6 +161,11 @@ def export_investment_memo(
 
     styles.add(ParagraphStyle(name="MemoKicker", parent=styles["MemoSmall"], fontName="Helvetica-Bold", textColor=NAVY, spaceAfter=5))
     styles.add(ParagraphStyle(name="MemoSource", parent=styles["MemoSmall"], fontSize=7.5, leading=10, spaceAfter=3))
+    styles.add(ParagraphStyle(name="MemoMetricLabel", parent=styles["MemoSmall"], fontName="Helvetica-Bold", fontSize=7, leading=10, spaceAfter=3))
+    styles.add(ParagraphStyle(name="MemoMetricValue", parent=styles["MemoBody"], fontName="Helvetica-Bold", fontSize=11, leading=14, textColor=NAVY, spaceAfter=1))
+    styles.add(ParagraphStyle(name="MemoThesis", parent=styles["MemoBody"], fontName="Helvetica-Bold", fontSize=10, leading=15, textColor=NAVY, spaceAfter=5))
+    styles.add(ParagraphStyle(name="MemoAppendix", parent=styles["MemoSmall"], fontSize=7.2, leading=10, spaceAfter=2))
+
     story = []
 
     def add(text, style="MemoBody"):
@@ -209,17 +214,80 @@ def export_investment_memo(
         "MemoDisclaimer",
     )
 
-    story.append(Spacer(1, 12))
-    add("RESEARCH AT A GLANCE", "MemoKicker")
-    snapshot = [
-        [Paragraph("COMPANY", styles["MemoSmall"]), Paragraph("FISCAL YEAR END", styles["MemoSmall"]), Paragraph("RESEARCH STATUS", styles["MemoSmall"])],
-        [Paragraph(safe_text(brief.company_name), styles["MemoBody"]), Paragraph(safe_text(brief.fiscal_year_end), styles["MemoBody"]), Paragraph("Human review required", styles["MemoBody"])],
+    # Editorial executive summary, using only existing brief content.
+    by_title = {section.title: section for section in brief.sections}
+    thesis_section = by_title.get("Investment Theses")
+    financial_section = by_title.get("Financial Momentum")
+    demo_section = by_title.get("Offline Research Demo")
+    thesis_statement = "No saved investment thesis."
+    if thesis_section:
+        for line in thesis_section.summary.splitlines():
+            if line.startswith("Core Statement: "):
+                thesis_statement = line.partition(": ")[2]
+                break
+    assessment = "Not assessed"
+    if demo_section:
+        for line in demo_section.summary.splitlines():
+            if line.startswith("Assessment: "):
+                assessment = line.partition(": ")[2].split(" (not a verified")[0]
+                break
+    add("EXECUTIVE RESEARCH SUMMARY", "MemoSection")
+    add("INVESTMENT THESIS  /  USER-SAVED, NOT VALIDATED", "MemoMetricLabel")
+    add(thesis_statement, "MemoThesis")
+    metrics = [
+        ("RESEARCH ASSESSMENT", assessment),
+        ("VERIFIED BY OFFLINE MOCK", "0 supporting / 0 contradicting" if demo_section else "No offline analysis supplied"),
     ]
-    snapshot_table = Table(snapshot, colWidths=[190, 115, 190], hAlign="LEFT")
-    snapshot_table.setStyle(TableStyle([("BACKGROUND", (0,0),(-1,-1), colors.HexColor("#F3F6FB")), ("BOX",(0,0),(-1,-1),.5,colors.HexColor("#DEE6F0")), ("VALIGN",(0,0),(-1,-1),"TOP"), ("LEFTPADDING",(0,0),(-1,-1),10), ("TOPPADDING",(0,0),(-1,-1),8), ("BOTTOMPADDING",(0,0),(-1,-1),7)]))
-    story.append(snapshot_table)
-    story.append(Spacer(1, 14))
+    if financial_section:
+        import re
+        fs = financial_section.summary
+        for label, pattern in [
+            ("REVENUE", r"Revenue: (\$[\d,.]+B)"),
+            ("REVENUE GROWTH", r"Revenue growth: ([\d,.]+%)"),
+            ("NET MARGIN", r"Net margin: ([\d,.]+%)"),
+        ]:
+            match = re.search(pattern, fs)
+            if match:
+                metrics.append((label, match.group(1)))
+    cells = [
+        [Paragraph(safe_text(label), styles["MemoMetricLabel"]),
+         Paragraph(safe_text(value), styles["MemoMetricValue"])]
+        for label, value in metrics
+    ]
+    metric_rows = []
+    for i in range(0, len(cells), 2):
+        row = []
+        for pair in cells[i:i+2]:
+            row.append([pair[0], pair[1]])
+        if len(row) == 1:
+            row.append("")
+        metric_rows.append(row)
+    metric_table = Table(metric_rows, colWidths=[247, 247], hAlign="LEFT")
+    metric_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F3F6FB")),
+        ("BOX", (0, 0), (-1, -1), .5, colors.HexColor("#DEE6F0")),
+        ("INNERGRID", (0, 0), (-1, -1), .4, colors.HexColor("#DEE6F0")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 11),
+        ("TOPPADDING", (0, 0), (-1, -1), 9),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.append(metric_table)
+    story.append(Spacer(1, 10))
+    add("Research status: human review required. Financial figures are company-wide context, not proof of the thesis.", "MemoSmall")
+    if demo_section:
+        gaps = [line.partition("Research gap: ")[2] for line in demo_section.summary.splitlines()
+                if line.startswith("Research gap: ")]
+        if gaps:
+            add("PRIORITY RESEARCH GAPS", "MemoKicker")
+            for i, gap in enumerate(gaps[:3], 1):
+                add(f"{i}. {gap}", "MemoSmall")
+    add("Offline retrieval identifies candidate SEC passages only; no LLM interpretation or verified investment conclusion.", "MemoSmall")
+    story.append(HRFlowable(width="100%", thickness=.7, color=colors.HexColor("#DEE6F0")))
+    story.append(Spacer(1, 8))
 
+    # Keep the long offline source inventory separate from the narrative.
+    appendix_section = by_title.get("Offline Research Demo")
     # Research sections
     for section in brief.sections:
 
@@ -270,9 +338,8 @@ def export_investment_memo(
 
 
         is_inventory = section.title == "Offline Research Demo"
-        if is_inventory and section.evidence:
-            add("APPENDIX  /  AVAILABLE SEC RESEARCH SOURCES", "MemoSection")
-            add("These are context, filing metadata, and retrieved candidates; none is verified thesis support or contradiction.", "MemoSmall")
+        if is_inventory:
+            continue
         for index, evidence in enumerate(section.evidence, start=1):
             label = "Research Source" if is_inventory else "Source / Saved Evidence"
             description = evidence.description
@@ -328,6 +395,32 @@ def export_investment_memo(
         if section.requires_human_review:
             add("Human review required.", "MemoSmall")
 
+    # Separate compact appendix. Source labels and clickable SEC links are retained.
+    if appendix_section and appendix_section.evidence:
+        story.append(PageBreak())
+        add("APPENDIX  /  AVAILABLE SEC RESEARCH SOURCES", "MemoSection")
+        add("FIN = consolidated financial context; FILING = filing metadata; PASSAGE = keyword-ranked candidate text. None establishes verified support or contradiction.", "MemoSmall")
+        for index, evidence in enumerate(appendix_section.evidence, 1):
+            description = evidence.description
+            if len(description) > 270:
+                description = description[:267].rsplit(" ", 1)[0] + "... [excerpt; open SEC source for full context]"
+            story.append(KeepTogether([
+                Paragraph(safe_text(f"RESEARCH SOURCE {index:02d}  /  {description}"), styles["MemoAppendix"]),
+                Paragraph(safe_text(f"{evidence.evidence_type} | {evidence.verification_status}"), styles["MemoAppendix"]),
+            ]))
+            if evidence.citation:
+                add(f"Citation: {evidence.citation}", "MemoAppendix")
+            if evidence.source_url:
+                source_url = evidence.source_url.strip()
+                parsed = urlparse(source_url)
+                if parsed.scheme == "https" and parsed.hostname in ("sec.gov", "www.sec.gov", "data.sec.gov"):
+                    markup = f'<link href={quoteattr(source_url)} color="#245A81">Open original SEC source</link>'
+                    story.append(Paragraph(markup, styles["MemoAppendix"]))
+                else:
+                    add(f"Source URL requires review: {source_url}", "MemoAppendix")
+            story.append(Spacer(1, 5))
+        add("Human review required. Candidate excerpts are not verified investment evidence.", "MemoSmall")
+
     # Integrity summary
     story.append(Spacer(1, 12))
 
@@ -351,6 +444,17 @@ def export_investment_memo(
         "MemoSmall",
     )
 
-    document.build(story)
+    def footer(canvas, doc):
+        canvas.saveState()
+        width, _ = A4
+        canvas.setStrokeColor(colors.HexColor("#DEE6F0"))
+        canvas.line(48, 37, width - 48, 37)
+        canvas.setFont("Helvetica", 7)
+        canvas.setFillColor(MUTED)
+        canvas.drawString(48, 26, f"{brief.ticker}  /  AI Earnings Intelligence  /  Human review required")
+        canvas.drawRightString(width - 48, 26, f"Page {doc.page}")
+        canvas.restoreState()
+
+    document.build(story, onFirstPage=footer, onLaterPages=footer)
 
     return buffer.getvalue()
