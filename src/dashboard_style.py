@@ -105,6 +105,16 @@ def apply_dashboard_style():
     .ei-priority-row .ei-kpi-note { margin-top:.1rem; }
     @media(max-width:1100px) { .ei-profile-identity { grid-template-columns:repeat(3,minmax(0,1fr)); row-gap:1rem; } .ei-identity-primary { grid-column:1/-1; } .ei-kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
     @media(max-width:700px) { .ei-profile-identity { grid-template-columns:1fr; } .ei-identity-primary { grid-column:auto; } .ei-identity-detail { border-left:0; border-top:1px solid #e2e8f0; padding:.6rem .2rem; } .ei-kpi-grid { grid-template-columns:1fr 1fr; } }
+    /* Phase 4.7: readable source inventories, consistent spacing, responsive metrics. */
+    [data-testid="stExpander"] summary p { overflow-wrap:anywhere; line-height:1.45; }
+    [data-testid="stExpander"] [data-testid="stMarkdownContainer"] p { line-height:1.6; }
+    [data-testid="stExpander"] [data-testid="stVerticalBlock"] { gap:.58rem; }
+    [data-testid="stLinkButton"] a { border-radius:8px; }
+    [data-testid="stMetric"] { height:100%; }
+    @media(max-width:800px) {
+      [data-testid="stHorizontalBlock"] { flex-wrap:wrap; }
+      [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] { min-width:155px; }
+    }
     /* Phase 4.5: calmer research workspace and clearer interaction hierarchy. */
     [data-testid="stMainBlockContainer"] { max-width:1250px; }
     [data-testid="stVerticalBlock"] { gap:.8rem; }
