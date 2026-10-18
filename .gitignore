@@ -50,5 +50,9 @@ memo_enhanced_preview.pdf
 
 day17_ticker_audit.txt
 
-# Local scratch backups (not release source)
-src/filing_parser_backup.py
+# Phase 5 scratch and alternate prototype
+phase5_staging/
+demo_fixture/
+
+# Phase 5 scratch workspace (never deploy)
+phase5_staging/

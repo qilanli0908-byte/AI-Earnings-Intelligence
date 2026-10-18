@@ -1,3 +1,4 @@
+from src.public_demo import require_private_feature
 
 import os
 import json
@@ -30,6 +31,7 @@ def analyze_disclosure(
     This function makes a real API request when called.
     """
 
+    require_private_feature("Paid AI: analyze_disclosure")
     load_dotenv()
 
     api_key = os.getenv("OPENAI_API_KEY")

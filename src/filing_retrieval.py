@@ -1,3 +1,4 @@
+from src.public_demo import enabled, filing_root
 import pandas as pd
 import requests
 
@@ -134,6 +135,8 @@ def download_10k(ticker, filing, output_dir="data/filings"):
     url = filing["Document URL"]
 
     # Create the destination folder if necessary.
+    if enabled():
+        output_dir = str(filing_root())
     folder = Path(output_dir) / ticker
     folder.mkdir(parents=True, exist_ok=True)
 

@@ -4,6 +4,7 @@ import pandas as pd
 from html import escape
 
 from pathlib import Path
+from src.public_demo import enabled, filing_root
 
 from src.filing_parser import (
     extract_filing_text,
@@ -415,7 +416,7 @@ elif selected_page in (
 
     diff_ticker = selected_ticker
 
-    filing_folder = Path("data/filings") / diff_ticker
+    filing_folder = filing_root() / diff_ticker
 
     filing_files = sorted(
         filing_folder.glob("*_10K.html")
@@ -554,8 +555,12 @@ elif selected_page in (
                             st.warning("Two recent annual SEC 10-Ks are required.")
                             st.stop()
                         old_row, new_row = recent_pair.iloc[1], recent_pair.iloc[0]
-                        old_file = download_10k(diff_ticker, old_row)
-                        new_file = download_10k(diff_ticker, new_row)
+                        if enabled() and diff_ticker == "NVDA":
+                            old_file = filing_root() / "NVDA" / "NVDA_000104581025000023_10K.html"
+                            new_file = filing_root() / "NVDA" / "NVDA_000104581026000021_10K.html"
+                        else:
+                            old_file = download_10k(diff_ticker, old_row)
+                            new_file = download_10k(diff_ticker, new_row)
 
                     old_text = load_risk_factors(old_file)
                     new_text = load_risk_factors(new_file)
@@ -637,7 +642,7 @@ elif selected_page in (
                                 st.markdown("**Updated disclosure**")
                                 st.write(item["new"])
 
-                                if st.button(
+                                if not enabled() and st.button(
                                     "Analyze with AI",
                                     key=f"ai_revision_{index}"
                                 ):
@@ -681,7 +686,7 @@ elif selected_page in (
                                             research_key
                                         ] = cached_assessment
 
-                                if st.button(
+                                if not enabled() and st.button(
                                     "Assess Research Priority",
                                     key=research_key + "_button"
                                 ):

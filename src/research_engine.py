@@ -1,3 +1,4 @@
+from src.public_demo import require_private_feature
 
 import json
 import os
@@ -29,6 +30,7 @@ def assess_research_priority(
     Validates the result before returning it.
     """
 
+    require_private_feature("Paid AI: assess_research_priority")
     load_dotenv()
 
     api_key = os.getenv("OPENAI_API_KEY")

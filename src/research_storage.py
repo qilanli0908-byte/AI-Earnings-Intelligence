@@ -5,6 +5,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from src.research_models import ResearchAssessment
+from src.public_demo import enabled
 from src.research_validation import validate_research_assessment
 
 
@@ -54,6 +55,11 @@ def save_assessment(assessment: ResearchAssessment):
         assessment.new_disclosure,
     )
 
+    if enabled():
+        import streamlit as st
+        st.session_state[f"public_assessment_{assessment_id}"] = assessment
+        return None
+
     STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
     filepath = STORAGE_DIR / f"{assessment_id}.json"
@@ -87,6 +93,10 @@ def load_assessment(
         old_disclosure,
         new_disclosure,
     )
+
+    if enabled():
+        import streamlit as st
+        return st.session_state.get(f"public_assessment_{assessment_id}")
 
     filepath = STORAGE_DIR / f"{assessment_id}.json"
 

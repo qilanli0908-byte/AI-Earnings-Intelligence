@@ -1,5 +1,6 @@
 """Offline thesis-aware candidate retrieval. Ranking is NOT evidence interpretation."""
 from pathlib import Path
+from src.public_demo import enabled, filing_root
 import re
 from bs4 import BeautifulSoup
 from src.ai_research_models import ResearchEvidence
@@ -22,7 +23,10 @@ def local_filing_path(ticker, accession, root=ROOT):
     ticker = ticker.upper().strip()
     if not re.fullmatch(r'[A-Z0-9.-]{1,12}', ticker) or not re.fullmatch(r'\d{10}-\d{2}-\d{6}', accession):
         raise ValueError('Unsafe filing identifier')
-    return Path(root) / 'data' / 'filings' / ticker / f'{ticker}_{accession.replace("-", "")}_10K.html'
+    # Explicit roots are used by callers/tests and must remain authoritative.
+    # Only the default application cache is redirected in public mode.
+    base = filing_root() if enabled() and Path(root) == ROOT else Path(root) / 'data' / 'filings'
+    return base / ticker / f'{ticker}_{accession.replace("-", "")}_10K.html'
 
 def rank_passage(passage, terms, thesis_text):
     """Deterministic relevance ranking only; never assigns support/challenge status."""

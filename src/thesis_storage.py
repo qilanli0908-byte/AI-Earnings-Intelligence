@@ -4,6 +4,7 @@ import re
 from dataclasses import asdict
 from pathlib import Path
 from src.thesis_validation import validate_thesis
+from src.public_demo import enabled
 from src.thesis_models import (
     InvestmentThesis,
     ThesisEvidence,
@@ -48,6 +49,11 @@ def save_thesis(thesis: InvestmentThesis) -> None:
 
     thesis_map[thesis.thesis_id] = thesis
 
+    if enabled():
+        import streamlit as st
+        st.session_state[f"public_theses_{ticker}"] = list(thesis_map.values())
+        return
+
     STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
     path = _get_storage_path(ticker)
@@ -66,6 +72,19 @@ def load_theses(ticker: str) -> list[InvestmentThesis]:
     Load all saved theses for one ticker.
     Return an empty list if none have been saved.
     """
+    if enabled():
+        import streamlit as st
+        ticker = _validate_ticker(ticker)
+        key = f"public_theses_{ticker}"
+        if key not in st.session_state:
+            from src.thesis_models import InvestmentThesis, ThesisHypothesis
+            st.session_state[key] = [InvestmentThesis(
+                thesis_id="NVDA-BULL-001", ticker="NVDA", thesis_type="Bull",
+                statement="AI infrastructure spending will sustain NVIDIA growth over the next three years.",
+                hypotheses=[ThesisHypothesis(description="AI infrastructure demand will remain strong over the next three years.")],
+            )] if ticker == "NVDA" else []
+        return list(st.session_state[key])
+
     path = _get_storage_path(ticker)
 
     if not path.exists():
